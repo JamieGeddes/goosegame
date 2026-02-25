@@ -210,6 +210,7 @@ export class Buildings {
     const sign = new THREE.Mesh(signGeo, Mat.signWood);
     sign.position.set(0, 3, 2.6);
     pub.add(sign);
+    this.addPubLetters(pub, 0, 3, 2.6);
 
     // Outdoor table
     const tableGeo = new THREE.BoxGeometry(1.5, 0.08, 1);
@@ -251,5 +252,62 @@ export class Buildings {
     const barV = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.7, 0.13), Mat.windowFrame);
     barV.position.set(x, y, z);
     parent.add(barV);
+  }
+
+  addPubLetters(parent, signX, signY, signZ) {
+    const grids = {
+      P: [
+        [1,1,1,0],
+        [1,0,0,1],
+        [1,1,1,0],
+        [1,0,0,0],
+        [1,0,0,0],
+      ],
+      U: [
+        [1,0,0,1],
+        [1,0,0,1],
+        [1,0,0,1],
+        [1,0,0,1],
+        [1,1,1,1],
+      ],
+      B: [
+        [1,1,1,0],
+        [1,0,0,1],
+        [1,1,1,0],
+        [1,0,0,1],
+        [1,1,1,0],
+      ],
+    };
+
+    const cellSize = 0.07;
+    const cellDepth = 0.05;
+    const letterWidth = 4;
+    const letterHeight = 5;
+    const letterGap = 2;
+    const totalCells = 3 * letterWidth + 2 * letterGap;
+    const totalWidth = totalCells * cellSize;
+
+    const cellGeo = new THREE.BoxGeometry(cellSize, cellSize, cellDepth);
+    const startX = signX - totalWidth / 2 + cellSize / 2;
+    const startY = signY + (letterHeight * cellSize) / 2 - cellSize / 2;
+
+    let col = 0;
+    for (const letter of ['P', 'U', 'B']) {
+      const grid = grids[letter];
+      for (let row = 0; row < letterHeight; row++) {
+        for (let c = 0; c < letterWidth; c++) {
+          if (grid[row][c]) {
+            const cell = new THREE.Mesh(cellGeo, Mat.windowFrame);
+            cell.position.set(
+              startX + (col + c) * cellSize,
+              startY - row * cellSize,
+              signZ + 0.06
+            );
+            parent.add(cell);
+          }
+        }
+      }
+      col += letterWidth + letterGap;
+    }
   }
 }
