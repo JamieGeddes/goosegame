@@ -20,6 +20,13 @@ export class Pond {
     this.waterSurface.name = 'pondWater';
     this.group.add(this.waterSurface);
 
+    // Pond bed (hides ground/paths beneath water)
+    const bedGeo = new THREE.CircleGeometry(4, 24);
+    const bed = new THREE.Mesh(bedGeo, Mat.pondBed);
+    bed.rotation.x = -Math.PI / 2;
+    bed.position.y = 0.015;
+    this.group.add(bed);
+
     // Rock border
     const rockPositions = [];
     for (let a = 0; a < Math.PI * 2; a += 0.3) {
@@ -128,7 +135,7 @@ export class Pond {
   update(dt, elapsed) {
     // Gentle water animation
     if (this.waterSurface) {
-      this.waterSurface.position.y = 0.02 + Math.sin(elapsed * 0.5) * 0.02;
+      this.waterSurface.position.y = 0.03 + Math.sin(elapsed * 0.5) * 0.01;
     }
   }
 }

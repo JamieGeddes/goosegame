@@ -37,6 +37,7 @@ export const Mat = {
   rock:         toon(0x888888),
   rockDark:     toon(0x666666),
   mud:          toon(0x8B6914),
+  pondBed:      toon(0x3a6a5a),
 
   // Buildings
   wallWhite:    toon(0xf0ead8),
