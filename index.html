@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Goose Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #000; font-family: 'Georgia', 'Times New Roman', serif; }
+    #game-canvas { display: block; width: 100%; height: 100%; }
+
+    /* Start Screen */
+    #start-screen {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: linear-gradient(180deg, #87CEEB 0%, #98D8A0 70%, #6B8E23 100%);
+    }
+    #start-screen img {
+      width: 280px; height: auto;
+      filter: drop-shadow(4px 6px 8px rgba(0,0,0,0.3));
+      animation: gooseBob 2s ease-in-out infinite;
+    }
+    @keyframes gooseBob {
+      0%, 100% { transform: translateY(0) rotate(-2deg); }
+      50% { transform: translateY(-10px) rotate(2deg); }
+    }
+    #start-screen h1 {
+      font-size: 64px; color: #fff; text-shadow: 3px 3px 0 #2d5a1e, 6px 6px 0 rgba(0,0,0,0.2);
+      margin-top: 20px; letter-spacing: 4px;
+      font-family: 'Georgia', serif; font-style: italic;
+    }
+    #start-screen .subtitle {
+      font-size: 18px; color: #2d5a1e; margin-top: 8px; font-style: italic;
+    }
+    #start-screen .play-btn {
+      margin-top: 30px; padding: 14px 48px;
+      font-size: 24px; font-family: 'Georgia', serif; font-weight: bold;
+      background: #4CAF50; color: #fff; border: 3px solid #2d7a30;
+      border-radius: 8px; cursor: pointer;
+      box-shadow: 0 4px 0 #2d7a30, 0 6px 12px rgba(0,0,0,0.3);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .play-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #2d7a30, 0 8px 16px rgba(0,0,0,0.3); }
+    .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #2d7a30, 0 3px 6px rgba(0,0,0,0.3); }
+    #start-screen .controls-hint {
+      margin-top: 24px; color: #3a6b2a; font-size: 13px; text-align: center; line-height: 1.8;
+    }
+    #start-screen .controls-hint span { background: rgba(255,255,255,0.4); padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+
+    /* Task List */
+    #task-list {
+      display: none;
+      position: fixed; top: 16px; left: 16px; z-index: 50;
+      background: #f5e6c8; padding: 20px 24px; border-radius: 2px;
+      box-shadow: 3px 3px 8px rgba(0,0,0,0.3);
+      min-width: 260px;
+      transform: rotate(-1deg);
+      border-left: 3px solid #d4a574;
+    }
+    #task-list::before {
+      content: ''; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      width: 40px; height: 6px; background: #8B4513; border-radius: 3px;
+    }
+    #task-list h2 {
+      font-family: 'Comic Sans MS', 'Georgia', cursive; font-size: 20px;
+      color: #333; margin-bottom: 12px; text-decoration: underline;
+      text-decoration-style: wavy; text-decoration-color: #999;
+    }
+    #task-list ul { list-style: none; }
+    #task-list li {
+      font-size: 14px; color: #444; padding: 4px 0;
+      font-family: 'Comic Sans MS', 'Georgia', cursive;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #task-list li .checkbox {
+      width: 14px; height: 14px; border: 2px solid #888; border-radius: 2px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #4CAF50; flex-shrink: 0;
+    }
+    #task-list li.completed .checkbox { border-color: #4CAF50; }
+    #task-list li.completed .task-text { text-decoration: line-through; color: #999; }
+
+    /* Honk Indicator */
+    #honk-indicator {
+      display: none;
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      z-index: 50;
+      font-size: 48px; font-weight: bold; font-family: 'Georgia', serif; font-style: italic;
+      color: #FFD700; text-shadow: 3px 3px 0 #B22222, -1px -1px 0 #B22222, 1px -1px 0 #B22222, -1px 1px 0 #B22222;
+      pointer-events: none;
+    }
+
+    /* Interact Prompt */
+    #interact-prompt {
+      display: none;
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+      z-index: 50; padding: 8px 20px;
+      background: rgba(0,0,0,0.6); color: #fff; border-radius: 20px;
+      font-size: 14px; font-family: 'Georgia', serif;
+      pointer-events: none;
+    }
+
+    /* Victory Screen */
+    #victory-screen {
+      display: none;
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.7);
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    #victory-screen h1 {
+      font-size: 52px; color: #FFD700; text-shadow: 3px 3px 0 #B22222;
+      font-family: 'Georgia', serif; font-style: italic;
+    }
+    #victory-screen p { color: #fff; font-size: 20px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <div id="start-screen">
+    <img src="/images/Goose.png" alt="A mischievous goose" />
+    <h1>GOOSE GAME</h1>
+    <p class="subtitle">a game about being a horrible goose</p>
+    <button class="play-btn" id="play-btn">PLAY</button>
+    <div class="controls-hint">
+      <span>Arrow Keys</span> Move &nbsp; <span>Shift</span> Run &nbsp; <span>Space</span> Interact<br/>
+      <span>H</span> Honk &nbsp; <span>Mouse</span> Look Around
+    </div>
+  </div>
+
+  <div id="task-list">
+    <h2>To Do:</h2>
+    <ul id="task-items"></ul>
+  </div>
+
+  <div id="honk-indicator">HONK!</div>
+  <div id="interact-prompt">Press <strong>Space</strong></div>
+
+  <div id="victory-screen">
+    <h1>YOU DID IT!</h1>
+    <p>You were the most horrible goose.</p>
+    <p style="margin-top:8px; font-style:italic; color:#ccc;">All tasks complete!</p>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

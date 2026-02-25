@@ -1,0 +1,261 @@
+import { GameEngine } from './engine/GameEngine.js';
+import { InputManager } from './engine/InputManager.js';
+import { AudioManager } from './engine/AudioManager.js';
+import { CollisionManager } from './engine/CollisionManager.js';
+import { ThirdPersonCamera } from './camera/ThirdPersonCamera.js';
+import { Goose } from './characters/Goose.js';
+import { GooseController } from './characters/GooseController.js';
+import { Village } from './world/Village.js';
+import { ObjectRegistry } from './objects/ObjectRegistry.js';
+import { Villager } from './characters/Villager.js';
+import { VillagerAI } from './characters/VillagerAI.js';
+import { InteractionSystem } from './systems/InteractionSystem.js';
+import { TaskSystem } from './systems/TaskSystem.js';
+import { UIManager } from './ui/UIManager.js';
+import { distXZ } from './utils/MathHelpers.js';
+
+let engine, input, audio, collision, cam, goose, gooseCtrl;
+let village, objects, interaction, taskSystem, ui;
+let villagers = [];
+let gameState;
+
+function init() {
+  ui = new UIManager(startGame);
+}
+
+function startGame() {
+  const canvas = document.getElementById('game-canvas');
+
+  // Core systems
+  engine = new GameEngine(canvas);
+  input = new InputManager(canvas);
+  audio = new AudioManager();
+  audio.init();
+  audio.startAmbient();
+  collision = new CollisionManager();
+
+  // World
+  village = new Village(engine.scene, collision);
+
+  // Goose
+  goose = new Goose();
+  goose.group.position.set(0, 0, 0);
+  engine.scene.add(goose.group);
+
+  // Camera
+  cam = new ThirdPersonCamera(engine.camera, input);
+  cam.setTarget(goose.group);
+
+  // Controller
+  gooseCtrl = new GooseController(goose, input, cam, collision);
+
+  // Objects
+  objects = new ObjectRegistry(engine.scene, collision);
+
+  // Interaction
+  interaction = new InteractionSystem(goose, objects, engine.scene, audio);
+
+  // Villagers
+  setupVillagers();
+
+  // Tasks
+  taskSystem = new TaskSystem(audio);
+  taskSystem.onTaskComplete = (task) => ui.completeTask(task);
+  taskSystem.onAllComplete = () => {
+    setTimeout(() => ui.showVictory(), 1000);
+  };
+
+  // Game state shared between systems
+  gameState = {
+    objects,
+    village,
+    gooseCarrying: null,
+    forceDropItem: false,
+    events: {
+      boyFellInPuddle: false,
+      shopkeeperTrapped: false,
+      sneakedIntoGarden: false,
+    },
+  };
+
+  // Show UI
+  ui.showGame(taskSystem.getTasks());
+
+  // Lock pointer on canvas click
+  canvas.addEventListener('click', () => {
+    if (!document.pointerLockElement) {
+      canvas.requestPointerLock();
+    }
+  });
+
+  // Game loop
+  engine.onUpdate((dt, elapsed) => {
+    // Goose movement
+    const footstep = gooseCtrl.update(dt);
+    if (footstep === 'footstep') audio.footstep();
+    goose.update(dt);
+
+    // Camera
+    cam.update(dt);
+
+    // Village
+    village.update(dt, elapsed);
+
+    // Objects
+    objects.update(dt);
+
+    // Interaction system
+    interaction.update(dt);
+
+    // Update game state
+    gameState.gooseCarrying = interaction.getCarryingName();
+
+    // Handle force drop from villager catching goose
+    if (gameState.forceDropItem) {
+      interaction.forceDropCarried();
+      gameState.forceDropItem = false;
+    }
+
+    // Villager AI
+    const goosePos = goose.getPosition();
+    for (const { ai } of villagers) {
+      ai.update(dt, goosePos, gameState);
+    }
+
+    // Check special events
+    checkSpecialEvents(dt);
+
+    // Task checking
+    taskSystem.update(gameState);
+
+    // Input actions
+    if (input.justPressed('Space')) {
+      interaction.tryInteract();
+    }
+    if (input.justPressed('KeyH')) {
+      goose.honk();
+      audio.honk();
+      ui.honk();
+    }
+
+    // UI
+    ui.update(dt);
+
+    // End frame
+    input.endFrame();
+  });
+
+  engine.start();
+}
+
+function setupVillagers() {
+  // Gardener - patrols near garden
+  const gardener = new Villager('gardener', { x: 10, z: -4 });
+  const gardenerAI = new VillagerAI(gardener, [
+    { x: 10, z: -4 },
+    { x: 14, z: -4 },
+    { x: 14, z: -8 },
+    { x: 10, z: -8 },
+  ], {
+    alertRadius: 5,
+    chaseRadius: 3.5,
+    watchedItems: ['gardenerHat', 'rake', 'wateringCan', 'pumpkin'],
+  });
+  engine.scene.add(gardener.group);
+  villagers.push({ villager: gardener, ai: gardenerAI });
+
+  // Shopkeeper - near shop
+  const shopkeeper = new Villager('shopkeeper', { x: -15, z: 3 });
+  const shopkeeperAI = new VillagerAI(shopkeeper, [
+    { x: -15, z: 3 },
+    { x: -13, z: 3 },
+    { x: -13, z: 7 },
+    { x: -15, z: 7 },
+  ], {
+    alertRadius: 5,
+    chaseRadius: 4,
+    chaseSpeed: 3.5,
+    watchedItems: ['apple', 'key'],
+  });
+  engine.scene.add(shopkeeper.group);
+  villagers.push({ villager: shopkeeper, ai: shopkeeperAI });
+
+  // Boy - near puddle area
+  const boy = new Villager('boy', { x: 6, z: 10 });
+  const boyAI = new VillagerAI(boy, [
+    { x: 6, z: 10 },
+    { x: 10, z: 10 },
+    { x: 10, z: 14 },
+    { x: 6, z: 14 },
+  ], {
+    alertRadius: 4,
+    chaseRadius: 3,
+    chaseSpeed: 3.8,
+    watchedItems: ['sandwich'],
+  });
+  engine.scene.add(boy.group);
+  villagers.push({ villager: boy, ai: boyAI });
+
+  // Old Lady - near pond
+  const oldLady = new Villager('oldLady', { x: -5, z: 16 });
+  const oldLadyAI = new VillagerAI(oldLady, [
+    { x: -5, z: 16 },
+    { x: -3, z: 14 },
+    { x: -7, z: 14 },
+    { x: -5, z: 16 },
+  ], {
+    alertRadius: 4,
+    chaseRadius: 3,
+    chaseSpeed: 2.5,
+    giveUpRadius: 8,
+    watchedItems: ['glasses', 'radio'],
+  });
+  engine.scene.add(oldLady.group);
+  villagers.push({ villager: oldLady, ai: oldLadyAI });
+}
+
+function checkSpecialEvents(dt) {
+  const goosePos = goose.getPosition();
+
+  // Boy falling in puddle - if boy is chasing goose and goose runs past puddle
+  const boyEntry = villagers.find(v => v.villager.type === 'boy');
+  if (boyEntry && !gameState.events.boyFellInPuddle) {
+    const boyPos = boyEntry.villager.getPosition();
+    const puddlePos = { x: 8, z: 12 };
+    const boyToPuddle = distXZ(boyPos, puddlePos);
+    if (boyEntry.ai.getState() === 'chase' && boyToPuddle < 1.5) {
+      gameState.events.boyFellInPuddle = true;
+    }
+  }
+
+  // Shopkeeper trapped in phone booth
+  const shopEntry = villagers.find(v => v.villager.type === 'shopkeeper');
+  if (shopEntry && !gameState.events.shopkeeperTrapped) {
+    const shopPos = shopEntry.villager.getPosition();
+    const boothPos = { x: 5, z: 2 };
+    const dist = distXZ(shopPos, boothPos);
+    if (dist < 1.5 && shopEntry.ai.getState() === 'chase') {
+      // Check if phone booth gate/collision exists (not opened)
+      gameState.events.shopkeeperTrapped = true;
+    }
+  }
+
+  // Sneaked into garden - goose is inside garden1 area and gardener is patrolling
+  if (!gameState.events.sneakedIntoGarden) {
+    const gardenCenter = { x: 12, z: -6 };
+    const gooseDist = distXZ(goosePos, gardenCenter);
+    if (gooseDist < 3) {
+      const gardenerEntry = villagers.find(v => v.villager.type === 'gardener');
+      if (gardenerEntry && gardenerEntry.ai.getState() === 'patrol') {
+        gameState.events.sneakedIntoGarden = true;
+      }
+    }
+  }
+}
+
+// Start when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
