@@ -6,6 +6,18 @@ A 3D village mischief simulator where you play as a horrible goose. Inspired by 
   <img src="images/Goose.png" alt="A mischievous goose wearing a green bobble hat and scarf" width="280" />
 </p>
 
+## Screenshots
+
+<p align="center">
+  <img src="images/screenshot1.png" alt="The goose in the village square with the task list visible" width="600" />
+</p>
+<p align="center">
+  <img src="images/screenshot2.png" alt="The goose near the pub with tasks in progress" width="600" />
+</p>
+<p align="center">
+  <img src="images/screenshot3.png" alt="The goose meets a curious villager" width="600" />
+</p>
+
 ## About
 
 Control a mischievous goose and cause chaos in a small village. Complete tasks like stealing items from villagers, tricking them into embarrassing situations, and generally being a nuisance.
