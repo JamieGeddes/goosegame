@@ -49,6 +49,26 @@ export class Villager {
       this.group.add(eye);
     }
 
+    // Eyebrows
+    const browGeo = new THREE.BoxGeometry(0.055, 0.015, 0.02);
+    for (const side of [-0.06, 0.06]) {
+      const brow = new THREE.Mesh(browGeo, Mat.gooseEye);
+      brow.position.set(side, 1.48, 0.14);
+      this.group.add(brow);
+    }
+
+    // Nose
+    const noseGeo = new THREE.SphereGeometry(0.018, 6, 6);
+    const nose = new THREE.Mesh(noseGeo, config.skinMat);
+    nose.position.set(0, 1.39, 0.17);
+    this.group.add(nose);
+
+    // Mouth
+    const mouthGeo = new THREE.BoxGeometry(0.06, 0.015, 0.02);
+    const mouth = new THREE.Mesh(mouthGeo, Mat.mouth);
+    mouth.position.set(0, 1.34, 0.16);
+    this.group.add(mouth);
+
     // Hair
     if (config.hairMat) {
       const hairGeo = new THREE.SphereGeometry(0.19, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2);

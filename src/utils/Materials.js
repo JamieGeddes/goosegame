@@ -75,6 +75,7 @@ export const Mat = {
   pants:        toon(0x404050),
   pantsBrown:   toon(0x6a5030),
   shoe:         toon(0x3a2a1a),
+  mouth:        toon(0xc07060),
 
   // Objects
   objectWood:   toon(0x9a7040),
