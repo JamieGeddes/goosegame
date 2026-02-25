@@ -40,7 +40,7 @@ export class ThirdPersonCamera {
 
     const { dx, dy } = this.input.consumeMouseDelta();
     this.yaw += dx * this.rotateSpeed;
-    this.pitch = clamp(this.pitch - dy * this.rotateSpeed, -0.2, 1.2);
+    this.pitch = clamp(this.pitch - dy * this.rotateSpeed, 0.1, 1.2);
 
     const targetPos = new THREE.Vector3();
     this.target.getWorldPosition(targetPos);
@@ -55,6 +55,9 @@ export class ThirdPersonCamera {
       targetPos.y + camY,
       targetPos.z + camZ
     );
+
+    // Hard floor: never let camera go below ground
+    desiredPos.y = Math.max(desiredPos.y, 1.0);
 
     // Anti-clip: raycast from target to desired position
     if (this.collisionObjects.length > 0) {
