@@ -16,7 +16,7 @@ export class Pond {
     const waterGeo = new THREE.CircleGeometry(4, 24);
     this.waterSurface = new THREE.Mesh(waterGeo, Mat.water);
     this.waterSurface.rotation.x = -Math.PI / 2;
-    this.waterSurface.position.y = -0.05;
+    this.waterSurface.position.y = 0.02;
     this.waterSurface.name = 'pondWater';
     this.group.add(this.waterSurface);
 
@@ -128,7 +128,7 @@ export class Pond {
   update(dt, elapsed) {
     // Gentle water animation
     if (this.waterSurface) {
-      this.waterSurface.position.y = -0.05 + Math.sin(elapsed * 0.5) * 0.02;
+      this.waterSurface.position.y = 0.02 + Math.sin(elapsed * 0.5) * 0.02;
     }
   }
 }
