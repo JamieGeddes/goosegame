@@ -22,8 +22,8 @@ export class Gate extends InteractableObject {
       // Re-add collision when closing - approximate position
       const pos = this.getWorldPosition();
       this.collisionManager.addBox(
-        pos.x - 0.6, pos.z - 0.1,
-        pos.x + 0.6, pos.z + 0.1,
+        pos.x - 1.0, pos.z - 0.1,
+        pos.x + 1.0, pos.z + 0.1,
         this.collisionName
       );
     }

@@ -107,7 +107,7 @@ export class Gardens {
       // Collision for fence sides (except gate)
       if (sideIdx === 0) {
         // Front side - two segments with gap for gate
-        const gateWidth = 1.2;
+        const gateWidth = 2.0;
         const midX = (side.sx + side.ex) / 2;
         const midZ = side.sz;
         this.collision.addBox(

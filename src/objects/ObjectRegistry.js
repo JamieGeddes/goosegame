@@ -185,23 +185,23 @@ export class ObjectRegistry {
 
     const postGeo = new THREE.CylinderGeometry(0.06, 0.06, 1, 6);
     const postL = new THREE.Mesh(postGeo, Mat.fence);
-    postL.position.set(-0.5, 0.5, 0);
+    postL.position.set(-0.9, 0.5, 0);
     gate.add(postL);
 
     const postR = new THREE.Mesh(postGeo, Mat.fence);
-    postR.position.set(0.5, 0.5, 0);
+    postR.position.set(0.9, 0.5, 0);
     gate.add(postR);
 
     // Gate door (pivots on left post)
     const door = new THREE.Group();
-    door.position.set(-0.5, 0, 0);
+    door.position.set(-0.9, 0, 0);
 
-    const railGeo = new THREE.BoxGeometry(1, 0.04, 0.04);
+    const railGeo = new THREE.BoxGeometry(1.8, 0.04, 0.04);
     const railTop = new THREE.Mesh(railGeo, Mat.fence);
-    railTop.position.set(0.5, 0.7, 0);
+    railTop.position.set(0.9, 0.7, 0);
     door.add(railTop);
     const railBot = new THREE.Mesh(railGeo, Mat.fence);
-    railBot.position.set(0.5, 0.35, 0);
+    railBot.position.set(0.9, 0.35, 0);
     door.add(railBot);
 
     for (let i = 0; i < 5; i++) {
@@ -209,7 +209,7 @@ export class ObjectRegistry {
         new THREE.BoxGeometry(0.04, 0.4, 0.03),
         Mat.fence
       );
-      slat.position.set(0.1 + i * 0.2, 0.52, 0);
+      slat.position.set(0.2 + i * 0.35, 0.52, 0);
       door.add(slat);
     }
 
