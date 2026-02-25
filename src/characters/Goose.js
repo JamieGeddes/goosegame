@@ -16,6 +16,7 @@ export class Goose {
     this.idleTimer = 0;
     this.idleLookAngle = 0;
     this.carryingItem = null;
+    this.isInWater = false;
 
     this.build();
   }
@@ -163,14 +164,21 @@ export class Goose {
   update(dt) {
     const walkSpeed = this.isRunning ? 12 : 6;
 
+    // Swimming — lower body and hide legs when over water
+    const targetY = this.isInWater ? -0.3 : 0;
+    this.group.position.y += (targetY - this.group.position.y) * Math.min(1, 5 * dt);
+    this.legL.visible = this.legR.visible = !this.isInWater;
+
     if (this.isWalking) {
       this.walkPhase += dt * walkSpeed;
       this.idleTimer = 0;
 
-      // Leg animation
-      const legSwing = Math.sin(this.walkPhase) * 0.4;
-      this.legL.rotation.x = legSwing;
-      this.legR.rotation.x = -legSwing;
+      // Leg animation (skip when swimming — legs are hidden)
+      if (!this.isInWater) {
+        const legSwing = Math.sin(this.walkPhase) * 0.4;
+        this.legL.rotation.x = legSwing;
+        this.legR.rotation.x = -legSwing;
+      }
 
       // Body bob
       this.body.position.y = 0.8 + Math.abs(Math.sin(this.walkPhase * 2)) * 0.03;

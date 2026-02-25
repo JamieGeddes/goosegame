@@ -165,6 +165,16 @@ export class VillagerAI {
     from.x += nx * speed * dt;
     from.z += nz * speed * dt;
 
+    // Prevent villagers from entering the pond
+    const pondX = -8, pondZ = 10, pondR = 4.0;
+    const toPondX = from.x - pondX;
+    const toPondZ = from.z - pondZ;
+    const pondDist = Math.sqrt(toPondX * toPondX + toPondZ * toPondZ);
+    if (pondDist < pondR) {
+      from.x = pondX + (toPondX / pondDist) * pondR;
+      from.z = pondZ + (toPondZ / pondDist) * pondR;
+    }
+
     this.villager.group.rotation.y = Math.atan2(nx, nz);
   }
 

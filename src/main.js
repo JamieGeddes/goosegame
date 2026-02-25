@@ -92,7 +92,8 @@ function startGame() {
   engine.onUpdate((dt, elapsed) => {
     // Goose movement
     const footstep = gooseCtrl.update(dt);
-    if (footstep === 'footstep') audio.footstep();
+    if (footstep === 'footstep' && !goose.isInWater) audio.footstep();
+    goose.isInWater = village.isOverWater(goose.group.position);
     goose.update(dt);
 
     // Camera
