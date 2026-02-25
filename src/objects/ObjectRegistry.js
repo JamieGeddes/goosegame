@@ -134,7 +134,7 @@ export class ObjectRegistry {
       bread2.position.y = 0.04;
       g.add(bread2);
       return g;
-    }, 12, 0.75, 11.5);
+    }, 12, 0.05, 11.5);
 
     // Key
     this.key = this.createCarriable('key', () => {
