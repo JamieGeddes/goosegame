@@ -226,6 +226,44 @@ export class AudioManager {
     this.ambientNode.start();
   }
 
+  thud() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // Noise burst through lowpass for muffled body-hitting-ground
+    const noiseDuration = 0.2;
+    const noiseLen = Math.floor(this.ctx.sampleRate * noiseDuration);
+    const noiseBuf = this.ctx.createBuffer(1, noiseLen, this.ctx.sampleRate);
+    const noiseData = noiseBuf.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      noiseData[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen);
+    }
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuf;
+    const noiseLp = this.ctx.createBiquadFilter();
+    noiseLp.type = 'lowpass';
+    noiseLp.frequency.value = 300;
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.25, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, t + noiseDuration);
+    noiseSource.connect(noiseLp);
+    noiseLp.connect(noiseGain);
+    noiseGain.connect(this.masterGain);
+    noiseSource.start(t);
+
+    // Low sine tone for bass thump
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 80;
+    const oscGain = this.ctx.createGain();
+    oscGain.gain.setValueAtTime(0.3, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+    osc.connect(oscGain);
+    oscGain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  }
+
   gateCreak() {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();

@@ -30,6 +30,9 @@ export class VillagerAI {
 
     // Track stolen items this villager cares about
     this.watchedItems = config.watchedItems || [];
+
+    // Zones to avoid when not chasing (same format as pond: {x, z, r})
+    this.avoidZones = [];
   }
 
   update(dt, goosePos, gameState) {
@@ -179,6 +182,19 @@ export class VillagerAI {
     if (pondDist < pondR) {
       from.x = pondX + (toPondX / pondDist) * pondR;
       from.z = pondZ + (toPondZ / pondDist) * pondR;
+    }
+
+    // Avoid zones (skipped during chase so villager can stumble in)
+    if (this.state !== State.CHASE) {
+      for (const zone of this.avoidZones) {
+        const zx = from.x - zone.x;
+        const zz = from.z - zone.z;
+        const zd = Math.sqrt(zx * zx + zz * zz);
+        if (zd < zone.r) {
+          from.x = zone.x + (zx / zd) * zone.r;
+          from.z = zone.z + (zz / zd) * zone.r;
+        }
+      }
     }
 
     this.villager.group.rotation.y = Math.atan2(nx, nz);

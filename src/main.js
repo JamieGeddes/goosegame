@@ -220,12 +220,69 @@ function checkSpecialEvents(dt) {
 
   // Boy falling in puddle - if boy is chasing goose and goose runs past puddle
   const boyEntry = villagers.find(v => v.villager.type === 'boy');
-  if (boyEntry && !gameState.events.boyFellInPuddle) {
+  if (boyEntry && !gameState.boyFall) {
     const boyPos = boyEntry.villager.getPosition();
     const puddlePos = { x: 8, z: 12 };
     const boyToPuddle = distXZ(boyPos, puddlePos);
-    if (boyEntry.ai.getState() === 'chase' && boyToPuddle < 1.5) {
+    if (boyEntry.ai.getState() === 'chase' && boyToPuddle < 1.2) {
       gameState.events.boyFellInPuddle = true;
+      boyEntry.ai.trapped = true;
+      audio.thud();
+      // Face the puddle center so the boy falls toward it
+      const dx = puddlePos.x - boyPos.x;
+      const dz = puddlePos.z - boyPos.z;
+      boyEntry.villager.group.rotation.y = Math.atan2(dx, dz);
+      gameState.boyFall = { phase: 'falling', timer: 0 };
+    }
+  }
+
+  // Animate boy fall sequence
+  if (gameState.boyFall) {
+    const fall = gameState.boyFall;
+    const group = boyEntry.villager.group;
+    fall.timer += dt;
+
+    if (fall.phase === 'falling') {
+      // Tip forward over 0.4s
+      const t = Math.min(fall.timer / 0.4, 1);
+      group.rotation.x = t * (Math.PI / 2);
+      group.position.y = t * 0.35;
+      if (t >= 1) {
+        fall.phase = 'lying';
+        fall.timer = 0;
+      }
+    } else if (fall.phase === 'lying') {
+      // Stay on the ground for 2s
+      if (fall.timer >= 2) {
+        fall.phase = 'getting_up';
+        fall.timer = 0;
+      }
+    } else if (fall.phase === 'getting_up') {
+      // Rotate back upright over 0.5s
+      const t = Math.min(fall.timer / 0.5, 1);
+      group.rotation.x = (1 - t) * (Math.PI / 2);
+      group.position.y = (1 - t) * 0.35;
+      if (t >= 1) {
+        group.rotation.x = 0;
+        group.position.y = 0;
+        boyEntry.ai.trapped = false;
+        gameState.boyFall = null;
+
+        // Walk away from the puddle and avoid it in the future
+        const puddlePos = { x: 8, z: 12 };
+        const boyPos = boyEntry.villager.getPosition();
+        const awayX = boyPos.x - puddlePos.x;
+        const awayZ = boyPos.z - puddlePos.z;
+        const awayDist = Math.sqrt(awayX * awayX + awayZ * awayZ) || 1;
+        boyEntry.ai.returnTarget = {
+          x: puddlePos.x + (awayX / awayDist) * 4,
+          z: puddlePos.z + (awayZ / awayDist) * 4,
+        };
+        boyEntry.ai.state = 'return';
+        if (!boyEntry.ai.avoidZones.some(z => z.x === 8 && z.z === 12)) {
+          boyEntry.ai.avoidZones.push({ x: 8, z: 12, r: 1.5 });
+        }
+      }
     }
   }
 
