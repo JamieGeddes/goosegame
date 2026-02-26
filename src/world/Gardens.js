@@ -11,7 +11,7 @@ export class Gardens {
 
   build() {
     this.buildGarden1(12, -6);  // Gardener's garden
-    this.buildGarden2(-12, -10); // Secondary garden
+    this.buildGarden2(-12, -8); // Secondary garden
   }
 
   buildGarden1(x, z) {

@@ -154,7 +154,7 @@ export class ObjectRegistry {
     this.gates.push(this.gate1);
     this.objects.push(this.gate1);
 
-    const gate2Mesh = this.createGateMesh(-12, -12.5, 'gate2');
+    const gate2Mesh = this.createGateMesh(-12, -10.5, 'gate2');
     this.gate2 = new Gate(gate2Mesh, 'garden2_gate', this.collision, 'garden2_gate');
     this.scene.add(gate2Mesh);
     this.gates.push(this.gate2);
