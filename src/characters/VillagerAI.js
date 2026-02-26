@@ -26,12 +26,18 @@ export class VillagerAI {
     this.giveUpTimer = 0;
     this.returnTarget = null;
     this.isProvoked = false;
+    this.trapped = false;
 
     // Track stolen items this villager cares about
     this.watchedItems = config.watchedItems || [];
   }
 
   update(dt, goosePos, gameState) {
+    if (this.trapped) {
+      this.villager.isWalking = false;
+      return;
+    }
+
     const myPos = this.villager.getPosition();
     const dist = distXZ(myPos, goosePos);
 

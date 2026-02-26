@@ -160,6 +160,16 @@ export class ObjectRegistry {
     this.gates.push(this.gate2);
     this.objects.push(this.gate2);
 
+    // === Phone Booth Door ===
+    const boothDoorMesh = this.createBoothDoorMesh(5, 2);
+    this.boothDoor = new Gate(boothDoorMesh, 'phoneBoothDoor', this.collision, 'phoneBoothDoor', {
+      startsOpen: true,
+      collisionBox: { dx1: 0, dz1: -0.1, dx2: 0.9, dz2: 0.1 },
+    });
+    this.scene.add(boothDoorMesh);
+    this.gates.push(this.boothDoor);
+    this.objects.push(this.boothDoor);
+
     // === Pub Bell ===
     const bellMesh = this.createBellMesh(14, 2.8, 10.5);
     this.pubBell = new Bell(bellMesh, 'pubBell');
@@ -215,6 +225,19 @@ export class ObjectRegistry {
 
     gate.add(door);
     gate.position.set(x, 0, z);
+    return gate;
+  }
+
+  createBoothDoorMesh(boothX, boothZ) {
+    const gate = new THREE.Group();
+    gate.name = 'phoneBoothDoor';
+    gate.position.set(boothX - 0.5, 0, boothZ + 0.5);
+
+    const doorGeo = new THREE.BoxGeometry(0.9, 2.2, 0.05);
+    const door = new THREE.Mesh(doorGeo, Mat.phoneRed);
+    door.position.set(0.45, 1.1, 0);
+    gate.add(door);
+
     return gate;
   }
 

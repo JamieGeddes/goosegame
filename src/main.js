@@ -235,9 +235,11 @@ function checkSpecialEvents(dt) {
     const shopPos = shopEntry.villager.getPosition();
     const boothPos = { x: 5, z: 2 };
     const dist = distXZ(shopPos, boothPos);
-    if (dist < 1.5 && shopEntry.ai.getState() === 'chase') {
-      // Check if phone booth gate/collision exists (not opened)
+    const boothDoor = objects.getByName('phoneBoothDoor');
+    if (dist < 1.5 && shopEntry.ai.getState() === 'chase' && boothDoor && !boothDoor.isOpen) {
       gameState.events.shopkeeperTrapped = true;
+      shopEntry.ai.trapped = true;
+      shopEntry.villager.group.position.set(5, 0, 2);
     }
   }
 
