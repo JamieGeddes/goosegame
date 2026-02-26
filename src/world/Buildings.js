@@ -137,11 +137,23 @@ export class Buildings {
     const booth = new THREE.Group();
     booth.name = 'phoneBooth';
 
-    const wallsGeo = new THREE.BoxGeometry(1, 2.5, 1);
-    const walls = new THREE.Mesh(wallsGeo, Mat.phoneRed);
-    walls.position.y = 1.25;
-    walls.castShadow = true;
-    booth.add(walls);
+    // Three wall panels (back + left + right) with open front for entry
+    const backGeo = new THREE.BoxGeometry(1, 2.5, 0.05);
+    const backWall = new THREE.Mesh(backGeo, Mat.phoneRed);
+    backWall.position.set(0, 1.25, -0.475);
+    backWall.castShadow = true;
+    booth.add(backWall);
+
+    const sideGeo = new THREE.BoxGeometry(0.05, 2.5, 0.95);
+    const leftWall = new THREE.Mesh(sideGeo, Mat.phoneRed);
+    leftWall.position.set(-0.475, 1.25, 0.025);
+    leftWall.castShadow = true;
+    booth.add(leftWall);
+
+    const rightWall = new THREE.Mesh(sideGeo, Mat.phoneRed);
+    rightWall.position.set(0.475, 1.25, 0.025);
+    rightWall.castShadow = true;
+    booth.add(rightWall);
 
     // Glass panels
     const glassGeo = new THREE.BoxGeometry(0.05, 1.5, 0.7);
@@ -157,19 +169,13 @@ export class Buildings {
     roof.position.y = 2.55;
     booth.add(roof);
 
-    // Door frame
-    this.phoneBoothDoor = new THREE.Group();
-    this.phoneBoothDoor.position.set(-0.5, 0, 0.5);
-    const doorGeo = new THREE.BoxGeometry(0.05, 2.2, 0.9);
-    const door = new THREE.Mesh(doorGeo, Mat.phoneRed);
-    door.position.set(0.025, 1.1, -0.05);
-    this.phoneBoothDoor.add(door);
-    booth.add(this.phoneBoothDoor);
-
     booth.position.set(x, 0, z);
     booth.rotation.y = rot;
     this.group.add(booth);
-    this.collision.addBox(x - 0.7, z - 0.7, x + 0.7, z + 0.7, 'phoneBooth');
+    // Per-wall collision — front is open for entry
+    this.collision.addBox(x - 0.5, z - 0.5, x + 0.5, z - 0.4, 'phoneBoothBack');
+    this.collision.addBox(x - 0.5, z - 0.5, x - 0.4, z + 0.5, 'phoneBoothLeft');
+    this.collision.addBox(x + 0.4, z - 0.5, x + 0.5, z + 0.5, 'phoneBoothRight');
   }
 
   buildPub(x, z, rot) {
