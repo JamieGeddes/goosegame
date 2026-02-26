@@ -3,6 +3,7 @@ import { InteractableObject } from './InteractableObject.js';
 export class Gate extends InteractableObject {
   constructor(mesh, name, collisionManager, collisionName, options = {}) {
     super(mesh, name, 2.0);
+    this.door = mesh.userData.door || mesh;
     this.collisionManager = collisionManager;
     this.collisionName = collisionName;
     this.collisionBox = options.collisionBox || { dx1: -1.0, dz1: -0.1, dx2: 1.0, dz2: 0.1 };
@@ -12,7 +13,7 @@ export class Gate extends InteractableObject {
       this.isOpen = true;
       this.targetRotation = -Math.PI / 2;
       this.currentRotation = -Math.PI / 2;
-      mesh.rotation.y = -Math.PI / 2;
+      this.door.rotation.y = -Math.PI / 2;
     } else {
       this.isOpen = false;
       this.targetRotation = 0;
@@ -53,6 +54,6 @@ export class Gate extends InteractableObject {
     } else {
       this.currentRotation += Math.sign(diff) * speed * dt;
     }
-    this.mesh.rotation.y = this.currentRotation;
+    this.door.rotation.y = this.currentRotation;
   }
 }

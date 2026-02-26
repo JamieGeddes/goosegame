@@ -63,20 +63,24 @@ export class Gardens {
       { sx: x1, sz: z2, ex: x1, ez: z1 }, // left
     ];
 
+    const gateWidth = 2.0;
+    const gateVisualHalf = 0.9; // half-width of gate mesh (post positions)
+
     sides.forEach((side, sideIdx) => {
       const dx = side.ex - side.sx;
       const dz = side.ez - side.sz;
       const length = Math.sqrt(dx * dx + dz * dz);
       const numPosts = Math.floor(length / 1.0);
       const angle = Math.atan2(dx, dz);
+      const gateSkipT = gateVisualHalf / length; // skip zone in t-space
 
       for (let i = 0; i <= numPosts; i++) {
         const t = i / numPosts;
         const px = side.sx + dx * t;
         const pz = side.sz + dz * t;
 
-        // Skip posts near gate location (front middle)
-        if (sideIdx === 0 && Math.abs(t - 0.5) < 0.15) continue;
+        // Skip posts inside the gate opening
+        if (sideIdx === 0 && Math.abs(t - 0.5) < gateSkipT) continue;
 
         const post = new THREE.Mesh(postGeo, Mat.fence);
         post.position.set(px, 0.45, pz);
@@ -86,7 +90,7 @@ export class Gardens {
         // Rails between posts
         if (i < numPosts) {
           const nextT = (i + 1) / numPosts;
-          if (sideIdx === 0 && (Math.abs(t - 0.5) < 0.15 || Math.abs(nextT - 0.5) < 0.15)) continue;
+          if (sideIdx === 0 && (Math.abs(t - 0.5) < gateSkipT || Math.abs(nextT - 0.5) < gateSkipT)) continue;
 
           const segLen = length / numPosts;
           const midX = px + dx / numPosts * 0.5;
@@ -107,7 +111,6 @@ export class Gardens {
       // Collision for fence sides (except gate)
       if (sideIdx === 0) {
         // Front side - two segments with gap for gate
-        const gateWidth = 2.0;
         const midX = (side.sx + side.ex) / 2;
         const midZ = side.sz;
         this.collision.addBox(

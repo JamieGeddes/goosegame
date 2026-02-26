@@ -224,6 +224,7 @@ export class ObjectRegistry {
     }
 
     gate.add(door);
+    gate.userData.door = door;
     gate.position.set(x, 0, z);
     return gate;
   }
