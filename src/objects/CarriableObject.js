@@ -9,6 +9,8 @@ export class CarriableObject extends InteractableObject {
     this.droppedPosition = mesh.position.clone();
     this.originalPosition = mesh.position.clone();
     this.originalScale = mesh.scale.clone();
+    // C2: Radio playing state
+    this.isPlaying = false;
   }
 
   pickup(goose) {

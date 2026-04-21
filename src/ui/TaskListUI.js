@@ -2,6 +2,7 @@ export class TaskListUI {
   constructor() {
     this.container = document.getElementById('task-list');
     this.list = document.getElementById('task-items');
+    this.header = this.container.querySelector('h2');
     this.items = new Map();
   }
 
@@ -13,9 +14,10 @@ export class TaskListUI {
     this.container.style.display = 'none';
   }
 
-  setTasks(tasks) {
+  setTasks(tasks, title = 'To Do:') {
     this.list.textContent = '';
     this.items.clear();
+    this.header.textContent = title;
 
     for (const task of tasks) {
       const li = document.createElement('li');

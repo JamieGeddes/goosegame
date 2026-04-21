@@ -1,6 +1,22 @@
 import * as THREE from 'three';
 import { Mat } from '../utils/Materials.js';
 
+// Bush positions exported for gameplay systems (hiding, etc.)
+export const BUSH_DATA = [
+  { x: -6, z: -12, s: 0.8 },
+  { x: 6, z: -8, s: 0.6 },
+  { x: -14, z: 0, s: 0.7 },
+  { x: 18, z: 5, s: 0.9 },
+  { x: -3, z: 18, s: 0.7 },
+  { x: 8, z: 18, s: 0.6 },
+  { x: -20, z: -12, s: 0.8 },
+  { x: -8, z: -18, s: 0.5 },
+  { x: 15, z: -14, s: 0.7 },
+  { x: -18, z: 10, s: 0.6 },
+  { x: 3, z: -15, s: 0.5 },
+  { x: -2, z: 5, s: 0.4 },
+];
+
 export class Trees {
   constructor(collisionManager) {
     this.group = new THREE.Group();
@@ -29,21 +45,7 @@ export class Trees {
       this.addTree(x, z, s);
     });
 
-    // Bushes around the village
-    const bushPositions = [
-      { x: -6, z: -12, s: 0.8 },
-      { x: 6, z: -8, s: 0.6 },
-      { x: -14, z: 0, s: 0.7 },
-      { x: 18, z: 5, s: 0.9 },
-      { x: -3, z: 18, s: 0.7 },
-      { x: 8, z: 18, s: 0.6 },
-      { x: -20, z: -12, s: 0.8 },
-      { x: -8, z: -18, s: 0.5 },
-      { x: 15, z: -14, s: 0.7 },
-      { x: -18, z: 10, s: 0.6 },
-      { x: 3, z: -15, s: 0.5 },
-      { x: -2, z: 5, s: 0.4 },
-    ];
+    const bushPositions = BUSH_DATA;
 
     bushPositions.forEach(({ x, z, s }) => {
       this.addBush(x, z, s);

@@ -18,6 +18,18 @@ export class Goose {
     this.carryingItem = null;
     this.isInWater = false;
 
+    // D1: Hidden in bush
+    this.isHidden = false;
+    this.hiddenOpacity = 1.0;
+
+    // D2: Crouching
+    this.isCrouching = false;
+    this.crouchAmount = 0;
+
+    // F3: Crown (sandbox reward)
+    this.hasCrown = false;
+    this.crownMesh = null;
+
     this.build();
   }
 
@@ -74,10 +86,10 @@ export class Goose {
 
     // Green bobble hat
     const hatGeo = new THREE.CylinderGeometry(0.13, 0.15, 0.12, 10);
-    const hat = new THREE.Mesh(hatGeo, Mat.gooseHatGreen);
-    hat.position.set(0, 0.14, -0.02);
-    hat.castShadow = true;
-    this.head.add(hat);
+    this.hat = new THREE.Mesh(hatGeo, Mat.gooseHatGreen);
+    this.hat.position.set(0, 0.14, -0.02);
+    this.hat.castShadow = true;
+    this.head.add(this.hat);
 
     // Pom-pom
     const pomGeo = new THREE.SphereGeometry(0.06, 8, 8);
@@ -159,21 +171,54 @@ export class Goose {
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.01;
     this.group.add(shadow);
+
+    // Collect all meshes for opacity changes and pre-clone materials
+    this.allMeshes = [];
+    this.group.traverse(child => {
+      if (child.isMesh) {
+        child.material = child.material.clone();
+        child.material.transparent = true;
+        this.allMeshes.push(child);
+      }
+    });
   }
 
   update(dt) {
     const walkSpeed = this.isRunning ? 12 : 6;
 
-    // Swimming — lower body and hide legs when over water
-    const targetY = this.isInWater ? -0.3 : 0;
+    // Swimming - lower body and hide legs when over water
+    const swimTarget = this.isInWater ? -0.3 : 0;
+    // D2: Crouch lowers body
+    const crouchTarget = this.isCrouching ? -0.25 : 0;
+    const targetY = swimTarget + crouchTarget;
     this.group.position.y += (targetY - this.group.position.y) * Math.min(1, 5 * dt);
     this.legL.visible = this.legR.visible = !this.isInWater;
+
+    // D2: Crouch animation (lower body, compact posture)
+    const crouchGoal = this.isCrouching ? 1 : 0;
+    this.crouchAmount += (crouchGoal - this.crouchAmount) * Math.min(1, 8 * dt);
+    this.body.position.y = 0.8 - this.crouchAmount * 0.2;
+    this.neck.position.y = 1.05 - this.crouchAmount * 0.25;
+    this.neck.rotation.x = this.isHonking ? this.neck.rotation.x : this.crouchAmount * 0.3;
+    this.wingL.position.y = 0.85 - this.crouchAmount * 0.2;
+    this.wingR.position.y = 0.85 - this.crouchAmount * 0.2;
+
+    // D1: Hidden opacity
+    const opacityTarget = this.isHidden ? 0.4 : 1.0;
+    this.hiddenOpacity += (opacityTarget - this.hiddenOpacity) * Math.min(1, 5 * dt);
+    if (Math.abs(this.hiddenOpacity - opacityTarget) > 0.01) {
+      for (const mesh of this.allMeshes) {
+        if (mesh.material) {
+          mesh.material.opacity = this.hiddenOpacity;
+        }
+      }
+    }
 
     if (this.isWalking) {
       this.walkPhase += dt * walkSpeed;
       this.idleTimer = 0;
 
-      // Leg animation (skip when swimming — legs are hidden)
+      // Leg animation (skip when swimming - legs are hidden)
       if (!this.isInWater) {
         const legSwing = Math.sin(this.walkPhase) * 0.4;
         this.legL.rotation.x = legSwing;
@@ -181,7 +226,9 @@ export class Goose {
       }
 
       // Body bob
-      this.body.position.y = 0.8 + Math.abs(Math.sin(this.walkPhase * 2)) * 0.03;
+      if (!this.isCrouching) {
+        this.body.position.y = 0.8 + Math.abs(Math.sin(this.walkPhase * 2)) * 0.03;
+      }
 
       // Head bob
       this.head.position.y = 0.55 + Math.sin(this.walkPhase * 2) * 0.02;
@@ -197,7 +244,9 @@ export class Goose {
       // Idle - return to neutral
       this.legL.rotation.x *= 0.9;
       this.legR.rotation.x *= 0.9;
-      this.body.position.y = 0.8;
+      if (!this.isCrouching) {
+        this.body.position.y = 0.8;
+      }
       this.scarfTail1.rotation.z *= 0.95;
       this.scarfTail2.rotation.z *= 0.95;
 
@@ -221,16 +270,56 @@ export class Goose {
       } else {
         this.isHonking = false;
         this.honkTimer = 0;
-        this.neck.rotation.x = 0;
+        this.neck.rotation.x = this.isCrouching ? this.crouchAmount * 0.3 : 0;
         this.head.rotation.x = 0;
         this.beak.position.y = -0.02;
       }
+    }
+
+    // F3: Crown bob
+    if (this.crownMesh) {
+      this.crownMesh.rotation.y += dt * 0.5;
     }
   }
 
   honk() {
     this.isHonking = true;
     this.honkTimer = 0;
+  }
+
+  // D2: Set crouch state
+  setCrouch(on) {
+    this.isCrouching = on;
+  }
+
+  // D1: Set hidden state
+  setHidden(on) {
+    this.isHidden = on;
+  }
+
+  // F3: Add golden crown
+  addCrown() {
+    if (this.hasCrown) return;
+    this.hasCrown = true;
+    const crownGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.08, 5);
+    this.crownMesh = new THREE.Mesh(crownGeo, Mat.bellGold);
+    this.crownMesh.position.set(0, 0.28, -0.02);
+    this.head.add(this.crownMesh);
+
+    // Crown points
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      const point = new THREE.Mesh(
+        new THREE.ConeGeometry(0.02, 0.06, 4),
+        Mat.bellGold
+      );
+      point.position.set(
+        Math.cos(angle) * 0.1,
+        0.32,
+        Math.sin(angle) * 0.1 - 0.02
+      );
+      this.head.add(point);
+    }
   }
 
   getPosition() {

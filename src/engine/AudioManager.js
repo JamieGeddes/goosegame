@@ -3,6 +3,7 @@ export class AudioManager {
     this.ctx = null;
     this.masterGain = null;
     this.ambientNode = null;
+    this.radioNodes = null;
   }
 
   init() {
@@ -311,5 +312,321 @@ export class AudioManager {
       osc.start(t);
       osc.stop(t + 0.35);
     });
+  }
+
+  // === G1: NPC Vocal Reactions ===
+
+  npcAlert(pitchMultiplier = 1.0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(350 * pitchMultiplier, t);
+    osc.frequency.linearRampToValueAtTime(550 * pitchMultiplier, t + 0.12);
+    osc.frequency.linearRampToValueAtTime(480 * pitchMultiplier, t + 0.2);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.03);
+    gain.gain.setValueAtTime(0.12, t + 0.12);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  }
+
+  npcChase(pitchMultiplier = 1.0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dur = 0.3;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      const env = n < 0.1 ? n / 0.1 : 1 - (n - 0.1) / 0.9;
+      data[i] = (Math.random() * 2 - 1) * env * 0.3
+                + Math.sin(i * 0.02 * pitchMultiplier) * env * 0.4;
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buf;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 400 * pitchMultiplier;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.1;
+    source.connect(lp);
+    lp.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(t);
+  }
+
+  npcGiveUp(pitchMultiplier = 1.0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dur = 0.4;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      const env = n < 0.05 ? n / 0.05 : (1 - n) * 0.6;
+      const pitch = (300 - n * 150) * pitchMultiplier;
+      data[i] = (Math.random() * 2 - 1) * env * 0.5
+                + Math.sin(i / this.ctx.sampleRate * pitch * Math.PI * 2) * env * 0.2;
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 250 * pitchMultiplier;
+    bp.Q.value = 1;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.08;
+    source.connect(bp);
+    bp.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(t);
+  }
+
+  npcStartled(pitchMultiplier = 1.0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(500 * pitchMultiplier, t);
+    osc.frequency.linearRampToValueAtTime(700 * pitchMultiplier, t + 0.06);
+    osc.frequency.linearRampToValueAtTime(400 * pitchMultiplier, t + 0.15);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.15, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  }
+
+  // === C1: Bin knocked over ===
+
+  clatter() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    // Metallic rattling noise burst
+    const dur = 0.4;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      const env = Math.exp(-n * 6);
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    const source = this.ctx.createBufferSource();
+    source.buffer = buf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 800;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'peaking';
+    bp.frequency.value = 2000;
+    bp.gain.value = 8;
+    bp.Q.value = 2;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.15;
+    source.connect(hp);
+    hp.connect(bp);
+    bp.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(t);
+
+    // Metallic ring
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 600;
+    const oscGain = this.ctx.createGain();
+    oscGain.gain.setValueAtTime(0.08, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+    osc.connect(oscGain);
+    oscGain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.35);
+  }
+
+  // === C2: Radio melody ===
+
+  startRadio() {
+    if (!this.ctx || this.radioNodes) return;
+    // Simple procedural melody loop using oscillators
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.06;
+    gain.connect(this.masterGain);
+
+    const melody = [262, 294, 330, 349, 330, 294, 262, 247, 262, 294, 330, 294, 262, 262];
+    let noteIndex = 0;
+    const noteLength = 0.25;
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = melody[0];
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1200;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    osc.start();
+
+    const interval = setInterval(() => {
+      noteIndex = (noteIndex + 1) % melody.length;
+      osc.frequency.setValueAtTime(melody[noteIndex], this.ctx.currentTime);
+    }, noteLength * 1000);
+
+    this.radioNodes = { osc, gain, filter, interval };
+  }
+
+  stopRadio() {
+    if (!this.radioNodes) return;
+    clearInterval(this.radioNodes.interval);
+    this.radioNodes.osc.stop();
+    this.radioNodes = null;
+  }
+
+  // === F3: Rubber duck squeaky honk ===
+
+  squeakyHonk() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, t);
+    osc.frequency.linearRampToValueAtTime(1200, t + 0.05);
+    osc.frequency.exponentialRampToValueAtTime(600, t + 0.25);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+    gain.gain.setValueAtTime(0.12, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  }
+
+  // === G3: Item-specific pickup sounds ===
+
+  pickupItem(itemName) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    switch (itemName) {
+      case 'gardenerHat': {
+        // Cloth rustle
+        const dur = 0.12;
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) * 0.3;
+        const s = this.ctx.createBufferSource(); s.buffer = buf;
+        const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 3000; f.Q.value = 0.5;
+        const g = this.ctx.createGain(); g.gain.value = 0.15;
+        s.connect(f); f.connect(g); g.connect(this.masterGain); s.start(t);
+        break;
+      }
+      case 'rake': {
+        // Metallic scrape
+        const dur = 0.15;
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          const n = i / len;
+          d[i] = Math.sin(i * 0.08) * (1 - n) * 0.3 + (Math.random() * 2 - 1) * 0.1 * (1 - n);
+        }
+        const s = this.ctx.createBufferSource(); s.buffer = buf;
+        const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1500;
+        const g = this.ctx.createGain(); g.gain.value = 0.12;
+        s.connect(hp); hp.connect(g); g.connect(this.masterGain); s.start(t);
+        break;
+      }
+      case 'glasses': {
+        // Glass clink
+        const osc = this.ctx.createOscillator(); osc.type = 'sine';
+        osc.frequency.value = 2000;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t + 0.2);
+        break;
+      }
+      case 'key': {
+        // Key jingle
+        const freqs = [1800, 2200, 2600];
+        freqs.forEach((freq, i) => {
+          const osc = this.ctx.createOscillator(); osc.type = 'sine';
+          osc.frequency.value = freq;
+          const g = this.ctx.createGain();
+          const st = t + i * 0.04;
+          g.gain.setValueAtTime(0.06, st); g.gain.exponentialRampToValueAtTime(0.01, st + 0.1);
+          osc.connect(g); g.connect(this.masterGain); osc.start(st); osc.stop(st + 0.12);
+        });
+        break;
+      }
+      case 'sandwich': {
+        // Squish
+        const dur = 0.1;
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / len * 4) * 0.4;
+        const s = this.ctx.createBufferSource(); s.buffer = buf;
+        const lp = this.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+        const g = this.ctx.createGain(); g.gain.value = 0.1;
+        s.connect(lp); lp.connect(g); g.connect(this.masterGain); s.start(t);
+        break;
+      }
+      case 'apple': {
+        // Pop
+        const osc = this.ctx.createOscillator(); osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, t); osc.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t + 0.12);
+        break;
+      }
+      case 'wateringCan': {
+        // Water slosh
+        const dur = 0.15;
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / len * 5) * 0.3;
+        const s = this.ctx.createBufferSource(); s.buffer = buf;
+        const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 1;
+        const g = this.ctx.createGain(); g.gain.value = 0.1;
+        s.connect(bp); bp.connect(g); g.connect(this.masterGain); s.start(t);
+        break;
+      }
+      case 'radio': {
+        // Click
+        const osc = this.ctx.createOscillator(); osc.type = 'square';
+        osc.frequency.value = 1000;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.03);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t + 0.05);
+        break;
+      }
+      case 'pumpkin': {
+        // Hollow thud
+        const osc = this.ctx.createOscillator(); osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, t); osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.1, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+        osc.connect(g); g.connect(this.masterGain); osc.start(t); osc.stop(t + 0.15);
+        break;
+      }
+      default:
+        this.pickup();
+    }
   }
 }

@@ -10,6 +10,7 @@ export class GooseController {
 
     this.walkSpeed = 3.5;
     this.runSpeed = 6;
+    this.crouchSpeed = 1.75; // D2: Half walk speed
     this.turnSpeed = 8;
     this.targetAngle = 0;
     this.currentAngle = 0;
@@ -22,10 +23,24 @@ export class GooseController {
     const move = this.input.getMovement();
     const isMoving = Math.abs(move.x) > 0.01 || Math.abs(move.z) > 0.01;
     const isRunning = this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight');
-    const speed = isRunning ? this.runSpeed : this.walkSpeed;
+
+    // D2: Crouch mode (Ctrl or C key) - incompatible with carrying
+    const wantsCrouch = this.input.isDown('ControlLeft') || this.input.isDown('ControlRight') || this.input.isDown('KeyC');
+    const isCrouching = wantsCrouch && !this.goose.carryingItem;
+    this.goose.setCrouch(isCrouching);
+
+    // Speed depends on crouch/run state
+    let speed;
+    if (isCrouching) {
+      speed = this.crouchSpeed;
+    } else if (isRunning) {
+      speed = this.runSpeed;
+    } else {
+      speed = this.walkSpeed;
+    }
 
     this.goose.isWalking = isMoving;
-    this.goose.isRunning = isRunning && isMoving;
+    this.goose.isRunning = isRunning && isMoving && !isCrouching;
 
     if (isMoving) {
       // Camera-relative movement
@@ -55,12 +70,14 @@ export class GooseController {
       this.goose.group.position.z = Math.max(-bound, Math.min(bound, resolved.z));
       this.goose.group.rotation.y = this.currentAngle;
 
-      // Footstep timing
-      this.footstepTimer += dt;
-      const interval = isRunning ? 0.22 : this.footstepInterval;
-      if (this.footstepTimer >= interval) {
-        this.footstepTimer = 0;
-        return 'footstep';
+      // Footstep timing (no footsteps when crouching - D2)
+      if (!isCrouching) {
+        this.footstepTimer += dt;
+        const interval = isRunning ? 0.22 : this.footstepInterval;
+        if (this.footstepTimer >= interval) {
+          this.footstepTimer = 0;
+          return 'footstep';
+        }
       }
     } else {
       this.footstepTimer = 0;

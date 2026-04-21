@@ -11,7 +11,14 @@ export class InteractionSystem {
     this.nearestObject = null;
     this.carryingObject = null;
 
+    // C1: Bin reference (set by main.js)
+    this.props = null;
+
     this.promptEl = document.getElementById('interact-prompt');
+  }
+
+  setProps(props) {
+    this.props = props;
   }
 
   update(dt) {
@@ -32,6 +39,20 @@ export class InteractionSystem {
       }
     }
 
+    // C1: Also check bins for interaction
+    let nearestBin = null;
+    if (this.props) {
+      for (const bin of this.props.getBins()) {
+        if (bin.tipped) continue;
+        const dist = distXZ(goosePos, bin);
+        if (dist < bin.interactRadius && dist < nearestDist) {
+          nearestBin = bin;
+          nearestDist = dist;
+          nearest = null; // Bin takes priority if closer
+        }
+      }
+    }
+
     // Update highlights
     if (this.nearestObject && this.nearestObject !== nearest) {
       this.nearestObject.setHighlight(false);
@@ -40,12 +61,15 @@ export class InteractionSystem {
       nearest.setHighlight(true);
     }
     this.nearestObject = nearest;
+    this.nearestBin = nearestBin;
 
     // Show/hide interact prompt
-    const showPrompt = nearest !== null || this.carryingObject !== null;
+    const showPrompt = nearest !== null || this.carryingObject !== null || nearestBin !== null;
     this.promptEl.style.display = showPrompt ? 'block' : 'none';
     if (this.carryingObject) {
       this.promptEl.textContent = 'Press Space to drop';
+    } else if (nearestBin) {
+      this.promptEl.textContent = 'Press Space to knock over';
     } else if (nearest) {
       this.promptEl.textContent = 'Press Space';
     }
@@ -69,15 +93,40 @@ export class InteractionSystem {
       return { action: 'drop', item: droppedName };
     }
 
+    // C1: Bin tipping
+    if (this.nearestBin) {
+      this.props.tipBin(this.nearestBin);
+      this.audio.clatter();
+      return { action: 'tipBin', bin: this.nearestBin };
+    }
+
     if (!this.nearestObject) return null;
 
     const obj = this.nearestObject;
 
+    // C2: Radio toggle - if dropped radio is nearby, toggle it
+    if (obj instanceof CarriableObject && obj.name === 'radio' && !obj.isCarried) {
+      if (obj.isPlaying) {
+        obj.isPlaying = false;
+        this.audio.stopRadio();
+        return { action: 'radioOff' };
+      }
+      // Normal pickup for radio (not toggling)
+    }
+
     // Carriable object - pick up
     if (obj instanceof CarriableObject) {
+      // G3: Item-specific pickup sound
+      this.audio.pickupItem(obj.name);
       obj.pickup(this.goose);
       this.carryingObject = obj;
-      this.audio.pickup();
+
+      // C2: If radio was playing, stop when picked up
+      if (obj.name === 'radio' && obj.isPlaying) {
+        obj.isPlaying = false;
+        this.audio.stopRadio();
+      }
+
       return { action: 'pickup', item: obj.name };
     }
 
@@ -93,6 +142,24 @@ export class InteractionSystem {
     }
 
     return { action: 'interact', item: obj.name };
+  }
+
+  // C2: Toggle radio on/off when dropped and Space pressed
+  tryToggleRadio() {
+    if (this.carryingObject) return false;
+    const goosePos = this.goose.getPosition();
+    const radio = this.registry.getByName('radio');
+    if (!radio || radio.isCarried) return false;
+    const dist = distXZ(goosePos, radio.getWorldPosition());
+    if (dist > 1.5) return false;
+
+    radio.isPlaying = !radio.isPlaying;
+    if (radio.isPlaying) {
+      this.audio.startRadio();
+    } else {
+      this.audio.stopRadio();
+    }
+    return true;
   }
 
   isCarrying() {

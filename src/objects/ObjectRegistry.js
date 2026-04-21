@@ -178,6 +178,48 @@ export class ObjectRegistry {
     this.objects.push(this.pubBell);
   }
 
+  // F3: Spawn sandbox reward objects after completion
+  spawnSandboxRewards() {
+    // Rubber duck in pond
+    this.rubberDuck = this.createCarriable('rubberDuck', () => {
+      const g = new THREE.Group();
+      // Body
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), Mat.bellGold);
+      body.scale.set(1, 0.8, 1.2);
+      g.add(body);
+      // Head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), Mat.bellGold);
+      head.position.set(0, 0.1, 0.1);
+      g.add(head);
+      // Beak
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 4), Mat.pumpkinOrange);
+      beak.position.set(0, 0.08, 0.18);
+      beak.rotation.x = Math.PI / 2;
+      g.add(beak);
+      // Eye dots
+      for (const side of [-0.03, 0.03]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.015, 4, 4), Mat.gooseEye);
+        eye.position.set(side, 0.13, 0.14);
+        g.add(eye);
+      }
+      return g;
+    }, -8, 0.1, 10);
+
+    // Golden crown near fountain
+    this.goldenCrown = this.createCarriable('goldenCrown', () => {
+      const g = new THREE.Group();
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.08, 5), Mat.bellGold);
+      g.add(band);
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const point = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.06, 4), Mat.bellGold);
+        point.position.set(Math.cos(angle) * 0.1, 0.06, Math.sin(angle) * 0.1);
+        g.add(point);
+      }
+      return g;
+    }, 0, 0.5, -6);
+  }
+
   createCarriable(name, buildFn, x, y, z) {
     const mesh = buildFn();
     mesh.position.set(x, y, z);

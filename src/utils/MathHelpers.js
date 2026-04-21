@@ -26,3 +26,10 @@ export function randomRange(min, max) {
 export function randomPick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+
+export function angleDiff(a, b) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}

@@ -5,6 +5,12 @@ export class Props {
   constructor(collisionManager) {
     this.group = new THREE.Group();
     this.collision = collisionManager;
+
+    // C1: Bin references for tipping
+    this.bins = [];
+    // A2: Market stall item references for honk scatter
+    this.marketStallItems = [];
+
     this.build();
   }
 
@@ -120,6 +126,15 @@ export class Props {
 
     bin.position.set(x, 0, z);
     this.group.add(bin);
+
+    // C1: Store bin reference for tipping
+    this.bins.push({
+      group: bin,
+      x,
+      z,
+      tipped: false,
+      interactRadius: 1.5,
+    });
   }
 
   addSign(x, z, text) {
@@ -167,17 +182,67 @@ export class Props {
     canopy.rotation.x = 0.1;
     stall.add(canopy);
 
-    // Items on counter (decorative)
+    // Items on counter (decorative) - A2: store refs for honk scatter
+    const mats = [Mat.appleRed, Mat.pumpkinOrange, Mat.breadTan, Mat.vegGreen];
     for (let i = 0; i < 4; i++) {
       const itemGeo = new THREE.BoxGeometry(0.3, 0.2, 0.3);
-      const item = new THREE.Mesh(itemGeo, [Mat.appleRed, Mat.pumpkinOrange, Mat.breadTan, Mat.vegGreen][i]);
+      const item = new THREE.Mesh(itemGeo, mats[i]);
       item.position.set(-1 + i * 0.7, 0.9, 0);
       stall.add(item);
+      this.marketStallItems.push({
+        mesh: item,
+        originalPos: item.position.clone(),
+        scattered: false,
+      });
     }
 
     stall.position.set(x, 0, z);
     this.group.add(stall);
     this.collision.addBox(x - 1.7, z - 0.8, x + 1.7, z + 0.8, 'marketStall');
+
+    this.marketStallPos = { x, z };
+  }
+
+  // A2: Scatter market stall items
+  scatterStallItems() {
+    for (const item of this.marketStallItems) {
+      if (item.scattered) continue;
+      item.scattered = true;
+      // Animate items falling off counter
+      const targetY = 0.15;
+      const targetX = item.originalPos.x + (Math.random() - 0.5) * 1.5;
+      const targetZ = item.originalPos.z + (Math.random() > 0.5 ? 1 : -1) * (0.8 + Math.random() * 0.5);
+      item.targetPos = new THREE.Vector3(targetX, targetY, targetZ);
+      item.fallTimer = 0;
+      item.falling = true;
+    }
+  }
+
+  // C1: Tip a bin over
+  tipBin(binData) {
+    if (binData.tipped) return;
+    binData.tipped = true;
+    // Rotate bin 90 degrees to lie on side
+    const g = binData.group;
+    g.rotation.z = Math.PI / 2;
+    g.position.y = 0.22;
+  }
+
+  update(dt) {
+    // A2: Animate falling stall items
+    for (const item of this.marketStallItems) {
+      if (!item.falling) continue;
+      item.fallTimer += dt;
+      const t = Math.min(item.fallTimer / 0.5, 1);
+      // Arc trajectory
+      const arc = Math.sin(t * Math.PI) * 0.4;
+      item.mesh.position.x = item.originalPos.x + (item.targetPos.x - item.originalPos.x) * t;
+      item.mesh.position.y = item.originalPos.y + (item.targetPos.y - item.originalPos.y) * t + arc;
+      item.mesh.position.z = item.originalPos.z + (item.targetPos.z - item.originalPos.z) * t;
+      item.mesh.rotation.x = t * Math.PI * 0.5;
+      item.mesh.rotation.z = t * Math.PI * 0.3;
+      if (t >= 1) item.falling = false;
+    }
   }
 
   buildFountain(x, z) {
@@ -212,5 +277,9 @@ export class Props {
     fountain.position.set(x, 0, z);
     this.group.add(fountain);
     this.collision.addBox(x - 1.3, z - 1.3, x + 1.3, z + 1.3, 'fountain');
+  }
+
+  getBins() {
+    return this.bins;
   }
 }

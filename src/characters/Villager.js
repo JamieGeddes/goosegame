@@ -12,6 +12,28 @@ export class Villager {
     // Alert indicator
     this.alertMark = null;
 
+    // A1: Flinch state
+    this.flinchAmount = 0;
+    this.flinchTimer = 0;
+    this.isFlinching = false;
+
+    // B1: Idle activity
+    this.currentIdleActivity = null;
+    this.idleAnimTimer = 0;
+
+    // B3: Frustration
+    this.frustrationLevel = 0;
+    this.fistShakeTimer = 0;
+    this.isFistShaking = false;
+
+    // D3: Head scanning
+    this.headScanTarget = 0;
+    this.headScanCurrent = 0;
+
+    // G4: Speech bubble
+    this.speechBubble = null;
+    this.currentBubbleType = null;
+
     this.build(type);
     this.group.position.set(startPos.x, 0, startPos.z);
   }
@@ -35,46 +57,48 @@ export class Villager {
     }
 
     // Head
+    this.headGroup = new THREE.Group();
+    this.headGroup.position.y = 1.4;
+    this.group.add(this.headGroup);
+
     const headGeo = new THREE.SphereGeometry(0.18, 10, 10);
     const head = new THREE.Mesh(headGeo, config.skinMat);
-    head.position.y = 1.4;
     head.castShadow = true;
-    this.group.add(head);
+    this.headGroup.add(head);
 
     // Eyes
     const eyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
     for (const side of [-0.06, 0.06]) {
       const eye = new THREE.Mesh(eyeGeo, Mat.gooseEye);
-      eye.position.set(side, 1.44, 0.15);
-      this.group.add(eye);
+      eye.position.set(side, 0.04, 0.15);
+      this.headGroup.add(eye);
     }
 
     // Eyebrows
     const browGeo = new THREE.BoxGeometry(0.055, 0.015, 0.02);
     for (const side of [-0.06, 0.06]) {
       const brow = new THREE.Mesh(browGeo, Mat.gooseEye);
-      brow.position.set(side, 1.48, 0.14);
-      this.group.add(brow);
+      brow.position.set(side, 0.08, 0.14);
+      this.headGroup.add(brow);
     }
 
     // Nose
     const noseGeo = new THREE.SphereGeometry(0.018, 6, 6);
     const nose = new THREE.Mesh(noseGeo, config.skinMat);
-    nose.position.set(0, 1.39, 0.17);
-    this.group.add(nose);
+    nose.position.set(0, -0.01, 0.17);
+    this.headGroup.add(nose);
 
     // Mouth
     const mouthGeo = new THREE.BoxGeometry(0.06, 0.015, 0.02);
     const mouth = new THREE.Mesh(mouthGeo, Mat.mouth);
-    mouth.position.set(0, 1.34, 0.16);
-    this.group.add(mouth);
+    mouth.position.set(0, -0.06, 0.16);
+    this.headGroup.add(mouth);
 
     // Hair
     if (config.hairMat) {
       const hairGeo = new THREE.SphereGeometry(0.19, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2);
       const hair = new THREE.Mesh(hairGeo, config.hairMat);
-      hair.position.y = 1.4;
-      this.group.add(hair);
+      this.headGroup.add(hair);
     }
 
     // Hat
@@ -82,19 +106,19 @@ export class Villager {
       if (type === 'gardener') {
         // Straw hat
         const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.03, 10), config.hatMat);
-        brim.position.y = 1.58;
-        this.group.add(brim);
+        brim.position.y = 0.18;
+        this.headGroup.add(brim);
         const top = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.1, 8), config.hatMat);
-        top.position.y = 1.63;
-        this.group.add(top);
+        top.position.y = 0.23;
+        this.headGroup.add(top);
       } else if (type === 'boy') {
         // Baseball cap
         const cap = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2), config.hatMat);
-        cap.position.y = 1.43;
-        this.group.add(cap);
+        cap.position.y = 0.03;
+        this.headGroup.add(cap);
         const visor = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 0.1), config.hatMat);
-        visor.position.set(0, 1.52, 0.12);
-        this.group.add(visor);
+        visor.position.set(0, 0.12, 0.12);
+        this.headGroup.add(visor);
       }
     }
 
@@ -143,26 +167,136 @@ export class Villager {
       this.group.scale.set(0.7, 0.7, 0.7);
     }
 
-    // Alert exclamation mark (hidden initially)
-    this.alertMark = this.createAlertMark();
-    this.alertMark.visible = false;
-    this.group.add(this.alertMark);
+    // G4: Speech bubble (replaces old alert mark)
+    this.speechBubble = this.createSpeechBubble();
+    this.speechBubble.visible = false;
+    this.group.add(this.speechBubble);
+
+    // Keep alertMark reference for compatibility
+    this.alertMark = this.speechBubble;
   }
 
-  createAlertMark() {
+  // G4: Speech bubble using CanvasTexture
+  createSpeechBubble() {
     const g = new THREE.Group();
     g.position.y = 2.0;
 
-    const dotGeo = new THREE.SphereGeometry(0.04, 6, 6);
-    const dot = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-    g.add(dot);
+    // Create canvas for bubble text
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    this.bubbleCanvas = canvas;
+    this.bubbleCtx = canvas.getContext('2d');
 
-    const stickGeo = new THREE.BoxGeometry(0.04, 0.2, 0.04);
-    const stick = new THREE.Mesh(stickGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-    stick.position.y = 0.16;
-    g.add(stick);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    this.bubbleTexture = texture;
+
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(0.6, 0.6, 1);
+    g.add(sprite);
+    this.bubbleSprite = sprite;
 
     return g;
+  }
+
+  drawBubble(text, bgColor, textColor) {
+    const ctx = this.bubbleCtx;
+    ctx.clearRect(0, 0, 64, 64);
+
+    // Background circle
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.ellipse(32, 28, 26, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small triangle pointer at bottom
+    ctx.beginPath();
+    ctx.moveTo(26, 46);
+    ctx.lineTo(32, 56);
+    ctx.lineTo(38, 46);
+    ctx.fill();
+
+    // Outline
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(32, 28, 26, 22, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 28px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 32, 28);
+
+    this.bubbleTexture.needsUpdate = true;
+  }
+
+  drawStormCloud() {
+    const ctx = this.bubbleCtx;
+    ctx.clearRect(0, 0, 64, 64);
+
+    // Dark cloud shape
+    ctx.fillStyle = '#444';
+    ctx.beginPath();
+    ctx.arc(24, 28, 14, 0, Math.PI * 2);
+    ctx.arc(38, 24, 12, 0, Math.PI * 2);
+    ctx.arc(32, 34, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Lightning bolt
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(30, 36);
+    ctx.lineTo(34, 44);
+    ctx.lineTo(31, 44);
+    ctx.lineTo(35, 54);
+    ctx.lineTo(29, 46);
+    ctx.lineTo(32, 46);
+    ctx.lineTo(28, 36);
+    ctx.fill();
+
+    this.bubbleTexture.needsUpdate = true;
+  }
+
+  // G4: Set current bubble type
+  setBubble(type) {
+    if (type === this.currentBubbleType) return;
+    this.currentBubbleType = type;
+
+    if (!type) {
+      this.speechBubble.visible = false;
+      return;
+    }
+
+    this.speechBubble.visible = true;
+    switch (type) {
+      case 'alert':
+        this.drawBubble('!', '#ffffff', '#333333');
+        break;
+      case 'chase':
+        this.drawBubble('!!', '#ff4444', '#ffffff');
+        break;
+      case 'giveUp':
+        this.drawBubble('...', '#aaaaaa', '#555555');
+        break;
+      case 'searching':
+        this.drawBubble('?', '#ffdd44', '#555555');
+        break;
+      case 'startled':
+        this.drawBubble('!', '#ff8800', '#ffffff');
+        break;
+      case 'frustrated':
+        this.drawStormCloud();
+        break;
+    }
   }
 
   update(dt) {
@@ -176,14 +310,156 @@ export class Villager {
     } else {
       this.legL.rotation.x *= 0.9;
       this.legR.rotation.x *= 0.9;
-      this.armL.rotation.x *= 0.9;
-      this.armR.rotation.x *= 0.9;
+      // Only lerp arms back if not flinching or shaking fist
+      if (!this.isFlinching && !this.isFistShaking) {
+        this.armL.rotation.x *= 0.9;
+        this.armR.rotation.x *= 0.9;
+      }
     }
 
-    // Alert mark billboard (always face camera) - handled by rotation
-    if (this.alertMark.visible) {
-      this.alertMark.position.y = 2.0 + Math.sin(Date.now() * 0.005) * 0.05;
+    // A1: Flinch animation (arms raise)
+    if (this.isFlinching) {
+      this.flinchTimer += dt;
+      const t = Math.min(this.flinchTimer / 0.5, 1);
+      if (t < 0.3) {
+        // Arms fly up
+        const up = t / 0.3;
+        this.armL.rotation.x = -up * 1.5;
+        this.armR.rotation.x = -up * 1.5;
+        this.armL.rotation.z = up * 0.5;
+        this.armR.rotation.z = -up * 0.5;
+      } else {
+        // Arms come back down
+        const down = (t - 0.3) / 0.7;
+        this.armL.rotation.x = -1.5 * (1 - down);
+        this.armR.rotation.x = -1.5 * (1 - down);
+        this.armL.rotation.z = 0.5 * (1 - down);
+        this.armR.rotation.z = -0.5 * (1 - down);
+      }
+      if (t >= 1) {
+        this.isFlinching = false;
+        this.armL.rotation.z = 0;
+        this.armR.rotation.z = 0;
+      }
     }
+
+    // B3: Fist shake animation
+    if (this.isFistShaking) {
+      this.fistShakeTimer += dt;
+      const t = this.fistShakeTimer;
+      if (t < 1.0) {
+        this.armR.rotation.x = -2.0 + Math.sin(t * 15) * 0.3;
+        this.armR.rotation.z = -0.3;
+      } else {
+        this.isFistShaking = false;
+        this.armR.rotation.x = 0;
+        this.armR.rotation.z = 0;
+      }
+    }
+
+    // B1: Idle activity animations
+    if (this.currentIdleActivity) {
+      this.idleAnimTimer += dt;
+      this.animateIdleActivity();
+    }
+
+    // D3: Head scanning
+    this.headScanCurrent += (this.headScanTarget - this.headScanCurrent) * Math.min(1, dt * 5);
+    this.headGroup.rotation.y = this.headScanCurrent * 0.6;
+
+    // Speech bubble bob
+    if (this.speechBubble.visible) {
+      this.speechBubble.position.y = 2.0 + Math.sin(Date.now() * 0.005) * 0.05;
+    }
+  }
+
+  // B1: Idle activity animations
+  animateIdleActivity() {
+    const t = this.idleAnimTimer;
+    switch (this.currentIdleActivity) {
+      case 'tend_vegetables':
+        // Bend down repeatedly
+        this.group.children[0].position.y = 0.8 - Math.abs(Math.sin(t * 2)) * 0.15;
+        this.armL.rotation.x = -0.8 + Math.sin(t * 3) * 0.2;
+        this.armR.rotation.x = -0.8 + Math.sin(t * 3 + 1) * 0.2;
+        break;
+      case 'wipe_brow':
+        this.armR.rotation.x = -2.2;
+        this.armR.rotation.z = Math.sin(t * 4) * 0.2;
+        break;
+      case 'sweep':
+        this.armL.rotation.x = -0.5 + Math.sin(t * 3) * 0.3;
+        this.armR.rotation.x = -0.5 + Math.sin(t * 3) * 0.3;
+        this.group.rotation.y += Math.sin(t * 3) * 0.02;
+        break;
+      case 'rearrange':
+        this.armR.rotation.x = -0.8;
+        this.armR.rotation.z = Math.sin(t * 2) * 0.3;
+        break;
+      case 'sit':
+        // Lower position slightly
+        this.legL.rotation.x = -1.2;
+        this.legR.rotation.x = -1.2;
+        break;
+      case 'kick_ground':
+        this.legR.rotation.x = Math.sin(t * 4) * 0.5;
+        break;
+      case 'read':
+        this.armL.rotation.x = -1.0;
+        this.armR.rotation.x = -1.0;
+        this.headGroup.rotation.x = -0.15;
+        break;
+      case 'feed_ducks':
+        this.armR.rotation.x = -0.6 + Math.sin(t * 2) * 0.3;
+        break;
+    }
+  }
+
+  startIdleActivity(activity) {
+    this.currentIdleActivity = activity;
+    this.idleAnimTimer = 0;
+  }
+
+  stopIdleActivity() {
+    if (!this.currentIdleActivity) return;
+    // Reset body parts to neutral
+    this.group.children[0].position.y = 0.8;
+    this.legL.rotation.x = 0;
+    this.legR.rotation.x = 0;
+    this.armL.rotation.x = 0;
+    this.armR.rotation.x = 0;
+    this.armL.rotation.z = 0;
+    this.armR.rotation.z = 0;
+    this.headGroup.rotation.x = 0;
+    this.currentIdleActivity = null;
+  }
+
+  // A1: Trigger flinch
+  flinch() {
+    this.isFlinching = true;
+    this.flinchTimer = 0;
+  }
+
+  setFlinch(amount) {
+    this.flinchAmount = amount;
+  }
+
+  // B3: Trigger fist shake at sky
+  fistShake() {
+    this.isFistShaking = true;
+    this.fistShakeTimer = 0;
+    this.setBubble('frustrated');
+  }
+
+  // B3: Update frustration visuals
+  setFrustration(level) {
+    this.frustrationLevel = level;
+    // At level 3, change alert mark color (handled by speech bubble)
+  }
+
+  // D3: Set head scan direction
+  setHeadScan(direction) {
+    this.headScanTarget = direction;
   }
 
   getPosition() {
@@ -191,7 +467,10 @@ export class Villager {
   }
 
   setAlert(on) {
-    this.alertMark.visible = on;
+    // Handled by setBubble now, but keep for backward compatibility
+    if (!on && !this.currentBubbleType) {
+      this.speechBubble.visible = false;
+    }
   }
 }
 

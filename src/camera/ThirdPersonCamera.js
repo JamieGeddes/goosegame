@@ -17,6 +17,11 @@ export class ThirdPersonCamera {
 
     this.raycaster = new THREE.Raycaster();
     this.collisionObjects = [];
+
+    // Screen shake (G2)
+    this.shakeIntensity = 0;
+    this.shakeDuration = 0;
+    this.shakeTimer = 0;
   }
 
   setTarget(obj) {
@@ -33,6 +38,12 @@ export class ThirdPersonCamera {
 
   getRight() {
     return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+  }
+
+  shake(intensity, duration) {
+    this.shakeIntensity = intensity;
+    this.shakeDuration = duration;
+    this.shakeTimer = 0;
   }
 
   update(dt) {
@@ -76,5 +87,17 @@ export class ThirdPersonCamera {
     const t = 1 - Math.exp(-this.smoothSpeed * dt);
     this.camera.position.lerp(desiredPos, t);
     this.camera.lookAt(targetPos);
+
+    // Apply screen shake
+    if (this.shakeTimer < this.shakeDuration) {
+      this.shakeTimer += dt;
+      const progress = this.shakeTimer / this.shakeDuration;
+      const damping = 1 - progress;
+      const freq = 25;
+      const offsetX = Math.sin(this.shakeTimer * freq) * this.shakeIntensity * damping;
+      const offsetY = Math.sin(this.shakeTimer * freq * 1.3 + 1.5) * this.shakeIntensity * damping * 0.7;
+      this.camera.position.x += offsetX;
+      this.camera.position.y += offsetY;
+    }
   }
 }
