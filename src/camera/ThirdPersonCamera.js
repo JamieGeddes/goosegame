@@ -70,15 +70,20 @@ export class ThirdPersonCamera {
     // Hard floor: never let camera go below ground
     desiredPos.y = Math.max(desiredPos.y, 1.0);
 
-    // Anti-clip: raycast from target to desired position
+    // Pass 1: clip the lerp target so smoothing settles in the safe zone.
+    // Without this, the lerp each frame pulls the camera outward toward an
+    // outside-wall desiredPos and the pass-2 snap drags it back, producing
+    // continuous per-frame radial "breathing" (heavy flicker).
     if (this.collisionObjects.length > 0) {
-      const dir = desiredPos.clone().sub(targetPos).normalize();
-      this.raycaster.set(targetPos, dir);
-      this.raycaster.far = this.distance;
-      const hits = this.raycaster.intersectObjects(this.collisionObjects, true);
-      if (hits.length > 0 && hits[0].distance < this.distance) {
-        const safeDistance = hits[0].distance - 0.3;
-        if (safeDistance > 1) {
+      const dir = desiredPos.clone().sub(targetPos);
+      const dist = dir.length();
+      if (dist > 0.01) {
+        dir.divideScalar(dist);
+        this.raycaster.set(targetPos, dir);
+        this.raycaster.far = dist;
+        const hits = this.raycaster.intersectObjects(this.collisionObjects, true);
+        if (hits.length > 0) {
+          const safeDistance = Math.max(hits[0].distance - 0.3, 0.4);
           desiredPos.copy(targetPos).add(dir.multiplyScalar(safeDistance));
         }
       }
@@ -86,6 +91,25 @@ export class ThirdPersonCamera {
 
     const t = 1 - Math.exp(-this.smoothSpeed * dt);
     this.camera.position.lerp(desiredPos, t);
+
+    // Pass 2: if the lerp still has the camera past a wall (e.g. goose just
+    // ran up to one and smoothing hasn't caught up), hard-snap it in along
+    // the current target→camera direction. Only fires during transients.
+    if (this.collisionObjects.length > 0) {
+      const dir = this.camera.position.clone().sub(targetPos);
+      const dist = dir.length();
+      if (dist > 0.01) {
+        dir.divideScalar(dist);
+        this.raycaster.set(targetPos, dir);
+        this.raycaster.far = dist;
+        const hits = this.raycaster.intersectObjects(this.collisionObjects, true);
+        if (hits.length > 0) {
+          const safeDistance = Math.max(hits[0].distance - 0.3, 0.4);
+          this.camera.position.copy(targetPos).add(dir.multiplyScalar(safeDistance));
+        }
+      }
+    }
+
     this.camera.lookAt(targetPos);
 
     // Apply screen shake

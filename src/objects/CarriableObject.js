@@ -17,17 +17,21 @@ export class CarriableObject extends InteractableObject {
     if (this.isCarried) return false;
     this.isCarried = true;
 
-    // Remove from scene, attach to goose beak
+    // Remove from scene, attach to goose
     const worldPos = this.getWorldPosition();
     if (this.mesh.parent) {
       this.mesh.parent.remove(this.mesh);
     }
 
-    // Scale down slightly when carried
-    this.mesh.scale.set(0.7, 0.7, 0.7);
     this.mesh.rotation.set(0, 0, 0);
 
-    goose.attachToBeak(this.mesh);
+    if (this.attachMode === 'wear') {
+      this.mesh.scale.set(0.95, 0.95, 0.95);
+      goose.wearOnHead(this.mesh);
+    } else {
+      this.mesh.scale.set(0.7, 0.7, 0.7);
+      goose.attachToBeak(this.mesh);
+    }
     return true;
   }
 
@@ -35,7 +39,9 @@ export class CarriableObject extends InteractableObject {
     if (!this.isCarried) return false;
     this.isCarried = false;
 
-    const item = goose.detachFromBeak();
+    const item = this.attachMode === 'wear'
+      ? goose.removeFromHead()
+      : goose.detachFromBeak();
     if (item) {
       item.scale.copy(this.originalScale);
       scene.add(item);

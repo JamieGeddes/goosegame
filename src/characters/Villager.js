@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { Mat } from '../utils/Materials.js';
 
 export class Villager {
-  constructor(type, startPos) {
+  constructor(type, startPos, overrides = {}) {
     this.type = type;
+    this.overrides = overrides;
     this.group = new THREE.Group();
     this.group.name = `villager_${type}`;
     this.walkPhase = 0;
@@ -26,6 +27,10 @@ export class Villager {
     this.fistShakeTimer = 0;
     this.isFistShaking = false;
 
+    // Fire-alarm panic
+    this.isPanicking = false;
+    this.panicTimer = 0;
+
     // D3: Head scanning
     this.headScanTarget = 0;
     this.headScanCurrent = 0;
@@ -39,7 +44,8 @@ export class Villager {
   }
 
   build(type) {
-    const config = Villager.TYPES[type];
+    const baseConfig = Villager.TYPES[type];
+    const config = { ...baseConfig, ...this.overrides };
 
     // Body (cylinder)
     const bodyGeo = new THREE.CylinderGeometry(0.2, 0.25, 0.8, 8);
@@ -66,32 +72,33 @@ export class Villager {
     head.castShadow = true;
     this.headGroup.add(head);
 
-    // Eyes
+    // Eyes — positioned below the hairline (y < 0 in local head frame) so the
+    // hair hemisphere doesn't cover them when the head tilts forward.
     const eyeGeo = new THREE.SphereGeometry(0.025, 6, 6);
     for (const side of [-0.06, 0.06]) {
       const eye = new THREE.Mesh(eyeGeo, Mat.gooseEye);
-      eye.position.set(side, 0.04, 0.15);
+      eye.position.set(side, -0.02, 0.165);
       this.headGroup.add(eye);
     }
 
-    // Eyebrows
+    // Eyebrows — sit just above the eyes, still below the hairline
     const browGeo = new THREE.BoxGeometry(0.055, 0.015, 0.02);
     for (const side of [-0.06, 0.06]) {
       const brow = new THREE.Mesh(browGeo, Mat.gooseEye);
-      brow.position.set(side, 0.08, 0.14);
+      brow.position.set(side, 0.02, 0.16);
       this.headGroup.add(brow);
     }
 
     // Nose
     const noseGeo = new THREE.SphereGeometry(0.018, 6, 6);
     const nose = new THREE.Mesh(noseGeo, config.skinMat);
-    nose.position.set(0, -0.01, 0.17);
+    nose.position.set(0, -0.06, 0.175);
     this.headGroup.add(nose);
 
     // Mouth
     const mouthGeo = new THREE.BoxGeometry(0.06, 0.015, 0.02);
     const mouth = new THREE.Mesh(mouthGeo, Mat.mouth);
-    mouth.position.set(0, -0.06, 0.16);
+    mouth.position.set(0, -0.11, 0.155);
     this.headGroup.add(mouth);
 
     // Hair
@@ -120,6 +127,52 @@ export class Villager {
         visor.position.set(0, 0.12, 0.12);
         this.headGroup.add(visor);
       }
+    }
+
+    // Librarian: hair bun + half-moon glasses
+    if (type === 'librarian') {
+      const bun = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), config.hairMat);
+      bun.position.set(0, 0.05, -0.16);
+      this.headGroup.add(bun);
+      // Half-moon glasses perched on nose
+      const glassesGroup = new THREE.Group();
+      glassesGroup.position.set(0, -0.04, 0.17);
+      for (const side of [-0.06, 0.06]) {
+        const lens = new THREE.Mesh(
+          new THREE.TorusGeometry(0.035, 0.006, 4, 12, Math.PI),
+          Mat.objectMetal,
+        );
+        lens.position.set(side, 0, 0);
+        lens.rotation.z = Math.PI; // half visible on underside for half-moon look
+        glassesGroup.add(lens);
+      }
+      const bridge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.006, 0.006),
+        Mat.objectMetal,
+      );
+      glassesGroup.add(bridge);
+      this.headGroup.add(glassesGroup);
+      this.librarianGlasses = glassesGroup; // visible only until stolen
+    }
+
+    // Reader: book held in lap
+    if (type === 'reader') {
+      const bookGroup = new THREE.Group();
+      bookGroup.position.set(0, 0.95, 0.25);
+      const cover = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.04, 0.2),
+        config.bookMat || Mat.bookBrown,
+      );
+      bookGroup.add(cover);
+      const pages = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.02, 0.18),
+        Mat.paper,
+      );
+      pages.position.y = 0.03;
+      bookGroup.add(pages);
+      bookGroup.rotation.x = -0.3;
+      this.group.add(bookGroup);
+      this.lapBook = bookGroup;
     }
 
     // Arms
@@ -305,13 +358,15 @@ export class Villager {
       const swing = Math.sin(this.walkPhase) * 0.3;
       this.legL.rotation.x = swing;
       this.legR.rotation.x = -swing;
-      this.armL.rotation.x = -swing * 0.5;
-      this.armR.rotation.x = swing * 0.5;
+      if (!this.isPanicking) {
+        this.armL.rotation.x = -swing * 0.5;
+        this.armR.rotation.x = swing * 0.5;
+      }
     } else {
       this.legL.rotation.x *= 0.9;
       this.legR.rotation.x *= 0.9;
-      // Only lerp arms back if not flinching or shaking fist
-      if (!this.isFlinching && !this.isFistShaking) {
+      // Only lerp arms back if not flinching, shaking fist, or panicking
+      if (!this.isFlinching && !this.isFistShaking && !this.isPanicking) {
         this.armL.rotation.x *= 0.9;
         this.armR.rotation.x *= 0.9;
       }
@@ -355,6 +410,16 @@ export class Villager {
         this.armR.rotation.x = 0;
         this.armR.rotation.z = 0;
       }
+    }
+
+    // Fire-alarm panic: arms held high, flailing side-to-side
+    if (this.isPanicking) {
+      this.panicTimer += dt;
+      const t = this.panicTimer;
+      this.armL.rotation.x = -2.6 + Math.sin(t * 14) * 0.25;
+      this.armR.rotation.x = -2.6 + Math.sin(t * 13 + 1.3) * 0.25;
+      this.armL.rotation.z =  0.4 + Math.sin(t * 11) * 0.5;
+      this.armR.rotation.z = -0.4 + Math.sin(t * 12 + 0.7) * 0.5;
     }
 
     // B1: Idle activity animations
@@ -412,6 +477,34 @@ export class Villager {
       case 'feed_ducks':
         this.armR.rotation.x = -0.6 + Math.sin(t * 2) * 0.3;
         break;
+      case 'shelving_books':
+        // Reach up-and-forward, slide a book in, repeat
+        this.armR.rotation.x = -1.3 + Math.sin(t * 2.5) * 0.35;
+        this.armL.rotation.x = -0.5;
+        break;
+      case 'stamping':
+        // Right arm hammers down on desk rhythmically
+        this.armR.rotation.x = -0.6 - Math.max(0, Math.sin(t * 4)) * 0.7;
+        this.armL.rotation.x = -0.3;
+        break;
+      case 'hushing':
+        // Finger to lips pose (right arm up near face)
+        this.armR.rotation.x = -2.6;
+        this.armR.rotation.z = -0.2;
+        this.armL.rotation.x = -0.2;
+        break;
+      case 'reading_book':
+        // Seated reader: arms cradling a book in lap, head tilted down
+        this.armL.rotation.x = -1.2;
+        this.armR.rotation.x = -1.2;
+        this.armL.rotation.z = 0.2;
+        this.armR.rotation.z = -0.2;
+        this.legL.rotation.x = -1.4;
+        this.legR.rotation.x = -1.4;
+        this.headGroup.rotation.x = -0.3;
+        // Subtle page-flip motion
+        if (this.lapBook) this.lapBook.rotation.y = Math.sin(t * 0.8) * 0.1;
+        break;
     }
   }
 
@@ -449,6 +542,17 @@ export class Villager {
     this.isFistShaking = true;
     this.fistShakeTimer = 0;
     this.setBubble('frustrated');
+  }
+
+  panic() {
+    this.isPanicking = true;
+    this.panicTimer = 0;
+  }
+
+  stopPanic() {
+    this.isPanicking = false;
+    this.armL.rotation.z = 0;
+    this.armR.rotation.z = 0;
   }
 
   // B3: Update frustration visuals
@@ -506,5 +610,22 @@ Villager.TYPES = {
     hatMat: null,
     pantsMat: Mat.dressPurple,
     apronMat: null,
+  },
+  librarian: {
+    bodyMat: Mat.cardigan,
+    skinMat: Mat.skin,
+    hairMat: Mat.hairWhite,
+    hatMat: null,
+    pantsMat: Mat.cardiganDark,
+    apronMat: Mat.cardiganDark,
+  },
+  reader: {
+    bodyMat: Mat.shirtBlue,
+    skinMat: Mat.skin,
+    hairMat: Mat.hairBrown,
+    hatMat: null,
+    pantsMat: Mat.pants,
+    apronMat: null,
+    bookMat: Mat.bookBrown,
   },
 };

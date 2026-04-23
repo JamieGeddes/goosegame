@@ -14,12 +14,15 @@ import { TaskSystem } from './systems/TaskSystem.js';
 import { UIManager } from './ui/UIManager.js';
 import { BUSH_DATA } from './world/Trees.js';
 import { distXZ } from './utils/MathHelpers.js';
+import { createLibraryLevel } from './levels/libraryLevel.js';
 
 let engine, input, audio, collision, cam, goose, gooseCtrl;
 let village, objects, interaction, taskSystem, ui;
 let villagers = [];
 let gameState;
 let sandboxRewardsSpawned = false;
+let currentLevelId = 'village';
+let libraryLevel = null;
 
 // NPC vocal pitch per type
 const VOCAL_PITCH = {
@@ -33,7 +36,8 @@ function init() {
   ui = new UIManager(startGame);
 }
 
-function startGame() {
+function startGame(levelId = 'village') {
+  currentLevelId = levelId;
   const canvas = document.getElementById('game-canvas');
 
   // Core systems
@@ -44,12 +48,8 @@ function startGame() {
   audio.startAmbient();
   collision = new CollisionManager();
 
-  // World
-  village = new Village(engine.scene, collision);
-
   // Goose
   goose = new Goose();
-  goose.group.position.set(0, 0, 0);
   engine.scene.add(goose.group);
 
   // Camera
@@ -59,32 +59,39 @@ function startGame() {
   // Controller
   gooseCtrl = new GooseController(goose, input, cam, collision);
 
-  // Objects
-  objects = new ObjectRegistry(engine.scene, collision);
+  // === Level-specific world + object + villager setup ===
+  if (levelId === 'library') {
+    setupLibraryLevel();
+  } else {
+    setupVillageLevel();
+  }
 
   // Interaction
   interaction = new InteractionSystem(goose, objects, engine.scene, audio);
-
-  // Connect Props to InteractionSystem for bin tipping
-  interaction.setProps(village.props);
-
-  // Set game bins for VillagerAI obstacle avoidance
-  setGameBins(village.props.getBins());
-
-  // Villagers
-  setupVillagers();
+  if (levelId === 'village') {
+    interaction.setProps(village.props);
+    setGameBins(village.props.getBins());
+  } else {
+    setGameBins([]);
+  }
 
   // Tasks
-  taskSystem = new TaskSystem(audio);
+  const levelTasks = levelId === 'library' ? libraryLevel.tasks : undefined;
+  const levelHorribleTasks = levelId === 'library' ? libraryLevel.horribleTasks : undefined;
+  taskSystem = new TaskSystem(audio, {
+    tasks: levelTasks,
+    horribleTasks: levelHorribleTasks,
+    levelId,
+  });
   taskSystem.onTaskComplete = (task) => ui.completeTask(task);
   taskSystem.onAllComplete = () => {
     setTimeout(() => {
       ui.showVictory();
-      spawnSandboxRewards();
+      if (levelId === 'village') spawnSandboxRewards();
     }, 1000);
   };
 
-  // F2: Horrible mode callbacks
+  // F2: Horrible mode callbacks (village only)
   taskSystem.onHorribleTaskComplete = (task) => ui.completeHorribleTask(task);
   taskSystem.onHorribleComplete = () => {
     setTimeout(() => ui.showVictory(true), 1000);
@@ -114,6 +121,7 @@ function startGame() {
     wasCaught: false,
     dt: 0,
     events: {
+      // Village events
       boyFellInPuddle: false,
       shopkeeperTrapped: false,
       sneakedIntoGarden: false,
@@ -123,6 +131,8 @@ function startGame() {
       gardenerLockedOut: false,
       completedWithoutCatch: false,
       allFrustrated: false,
+      // Merge per-level events
+      ...(libraryLevel ? libraryLevel.initialEvents : {}),
     },
   };
 
@@ -143,11 +153,11 @@ function startGame() {
     // Goose movement
     const footstep = gooseCtrl.update(dt);
     if (footstep === 'footstep' && !goose.isInWater) audio.footstep();
-    goose.isInWater = village.isOverWater(goose.group.position);
+    goose.isInWater = village ? village.isOverWater(goose.group.position) : false;
     goose.update(dt);
 
-    // D1: Bush hiding check
-    updateBushHiding();
+    // D1: Bush hiding (village-only feature)
+    if (currentLevelId === 'village') updateBushHiding();
 
     // D2: Crouch state
     gameState.gooseCrouching = goose.isCrouching;
@@ -155,11 +165,11 @@ function startGame() {
     // Camera
     cam.update(dt);
 
-    // Village
-    village.update(dt, elapsed);
-
-    // Props animations (market stall scatter)
-    village.props.update(dt);
+    // World update
+    if (village) {
+      village.update(dt, elapsed);
+      village.props.update(dt);
+    }
 
     // Objects
     objects.update(dt);
@@ -184,7 +194,6 @@ function startGame() {
       ai.update(dt, goosePos, gameState);
       const newState = ai.getState();
 
-      // G1: Play vocal sound on state transition
       if (prevState !== newState) {
         if (newState === AIState.ALERT && prevState !== AIState.STARTLED) {
           audio.npcAlert(ai.vocalPitch);
@@ -196,25 +205,32 @@ function startGame() {
       }
     }
 
-    // B2: NPCs watch each other's chases
-    updateNPCChaseWatching();
+    if (currentLevelId === 'village') {
+      // B2: NPCs watch each other's chases
+      updateNPCChaseWatching();
+      // B3: Check frustration escalation
+      updateFrustration();
+      // Village-specific scripted events
+      checkSpecialEvents(dt);
+      checkNewTaskEvents(dt);
+    }
 
-    // B3: Check frustration escalation
-    updateFrustration();
-
-    // Check special events
-    checkSpecialEvents(dt);
-
-    // Check new task events
-    checkNewTaskEvents(dt);
+    // Library-level per-frame update
+    if (libraryLevel) {
+      libraryLevel.update(dt, gameState, { goose, villagers, audio, cam });
+    }
 
     // Task checking
     taskSystem.update(gameState);
 
     // Input actions
     if (input.justPressed('Space')) {
-      // C2: Try to toggle radio first
-      if (!interaction.tryToggleRadio()) {
+      // C2: Try to toggle radio first (village only)
+      let handled = false;
+      if (currentLevelId === 'village') {
+        handled = interaction.tryToggleRadio();
+      }
+      if (!handled) {
         const result = interaction.tryInteract();
         // G2: Screen shake on various actions
         if (result && result.action === 'tipBin') {
@@ -222,6 +238,8 @@ function startGame() {
         } else if (result && result.action === 'bell') {
           cam.shake(0.03, 0.1);
         }
+        // Forward interaction result to the level for custom handling
+        if (libraryLevel) libraryLevel.onInteract(result, gameState);
       }
     }
     if (input.justPressed('KeyH')) {
@@ -235,23 +253,26 @@ function startGame() {
         gameState.gooseHidden = false;
       }
 
-      // A1 + A2 + A3: Honk effects on NPCs and environment
-      handleHonkEffects(goosePos);
+      if (currentLevelId === 'village') {
+        handleHonkEffects(goosePos);
+      } else if (libraryLevel) {
+        libraryLevel.onHonk(goosePos, gameState);
+      }
     }
 
-    // F3: Rubber duck honk-back
-    handleRubberDuckHonk(goosePos);
+    if (currentLevelId === 'village') {
+      handleRubberDuckHonk(goosePos);
+    }
 
     // F1: Speedrun timer
     if (taskSystem.speedrunActive) {
       ui.updateSpeedrunTimer(taskSystem.getSpeedrunTime(), taskSystem.getPersonalBest());
     }
 
-    // C2: Radio distraction for old lady
-    updateRadioDistraction(dt);
-
-    // F3: Golden crown pickup
-    handleCrownPickup();
+    if (currentLevelId === 'village') {
+      updateRadioDistraction(dt);
+      handleCrownPickup();
+    }
 
     // UI
     ui.update(dt);
@@ -261,6 +282,15 @@ function startGame() {
   });
 
   engine.start();
+}
+
+// ===== Village-level setup =====
+
+function setupVillageLevel() {
+  village = new Village(engine.scene, collision);
+  objects = new ObjectRegistry(engine.scene, collision);
+  goose.group.position.set(0, 0, 0);
+  setupVillagers();
 }
 
 function setupVillagers() {
@@ -335,20 +365,48 @@ function setupVillagers() {
   });
   engine.scene.add(oldLady.group);
   villagers.push({ villager: oldLady, ai: oldLadyAI });
+
+  // Pond avoidance applies to every village villager, including while chasing
+  // (mirrors the former hardcoded push inside VillagerAI.moveToward).
+  const pondAvoid = { x: -8, z: 10, r: 4, evenDuringChase: true };
+  for (const ai of [gardenerAI, shopkeeperAI, boyAI, oldLadyAI]) {
+    ai.avoidZones.push(pondAvoid);
+  }
 }
 
-// D1: Bush hiding
+// ===== Library-level setup =====
+
+function setupLibraryLevel() {
+  libraryLevel = createLibraryLevel({ engine, audio, collision, goose, cam });
+  objects = libraryLevel.objects;
+  villagers = libraryLevel.villagers.slice();
+  const start = libraryLevel.gooseStartPos;
+  goose.group.position.set(start.x, start.y || 0, start.z);
+  goose.group.rotation.y = 0;
+  // Start the camera behind the goose so the library is in frame on arrival.
+  cam.yaw = Math.PI;
+  cam.pitch = 0.35;
+  const cp = Math.cos(cam.pitch);
+  const targetY = start.y + 1.2;
+  engine.camera.position.set(
+    start.x + Math.sin(cam.yaw) * cp * cam.distance,
+    targetY + Math.sin(cam.pitch) * cam.distance,
+    start.z + Math.cos(cam.yaw) * cp * cam.distance,
+  );
+  engine.camera.lookAt(start.x, targetY, start.z);
+}
+
+// D1: Bush hiding (village-only)
 function updateBushHiding() {
   const goosePos = goose.getPosition();
   const isMoving = goose.isWalking;
   const isHonking = goose.isHonking;
 
-  // Check if goose is inside any bush and stationary
   let inBush = false;
   if (!isMoving && !isHonking) {
     for (const bush of BUSH_DATA) {
       const dist = distXZ(goosePos, bush);
-      const radius = bush.s * 0.7; // Hide radius based on bush scale
+      const radius = bush.s * 0.7;
       if (dist < radius) {
         inBush = true;
         break;
@@ -365,7 +423,7 @@ function updateBushHiding() {
   }
 }
 
-// A1 + A2 + A3: Honk effects
+// A1 + A2 + A3: Honk effects (village-only)
 function handleHonkEffects(goosePos) {
   for (const { ai } of villagers) {
     const reaction = ai.onHonk(goosePos);
@@ -379,7 +437,6 @@ function handleHonkEffects(goosePos) {
     }
   }
 
-  // A2: Honk scatters market stall items
   if (village.props.marketStallPos) {
     const stallDist = distXZ(goosePos, village.props.marketStallPos);
     if (stallDist < 3) {
@@ -388,14 +445,13 @@ function handleHonkEffects(goosePos) {
     }
   }
 
-  // A2: Honk near fountain causes splash
   const fountainPos = { x: 0, z: -6 };
   if (distXZ(goosePos, fountainPos) < 2) {
     audio.splash();
   }
 }
 
-// B2: NPCs watch each other's chases
+// B2: NPCs watch each other's chases (village-only)
 function updateNPCChaseWatching() {
   const chasingNPCs = villagers.filter(v => v.ai.getState() === AIState.CHASE);
   if (chasingNPCs.length === 0) return;
@@ -409,7 +465,6 @@ function updateNPCChaseWatching() {
       const chaserPos = chaser.villager.getPosition();
       const dist = distXZ(myPos, chaserPos);
       if (dist < 12) {
-        // Face toward the chase
         const dx = chaserPos.x - myPos.x;
         const dz = chaserPos.z - myPos.z;
         villager.headGroup.rotation.y = Math.atan2(dx, dz) - villager.group.rotation.y;
@@ -418,9 +473,8 @@ function updateNPCChaseWatching() {
   }
 }
 
-// B3: Frustration tracking
+// B3: Frustration tracking (village-only)
 function updateFrustration() {
-  // Check if a villager's items have been stolen and goose escaped
   for (const { ai } of villagers) {
     if (ai.getState() === AIState.GIVE_UP && ai.isProvoked) {
       ai.addFrustration();
@@ -428,36 +482,32 @@ function updateFrustration() {
     }
   }
 
-  // Check if all NPCs are frustrated (for F2 task)
   const allMax = villagers.every(v => v.ai.frustration >= 3);
   if (allMax) {
     gameState.events.allFrustrated = true;
   }
 }
 
-// F3: Rubber duck honk back
+// F3: Rubber duck honk back (village-only)
 function handleRubberDuckHonk(goosePos) {
   if (!objects.rubberDuck) return;
   const duck = objects.rubberDuck;
   if (duck.isCarried && goose.isHonking) {
-    // Honk at the duck = squeaky honk back
     audio.squeakyHonk();
   }
 }
 
-// F3: Crown equip
+// F3: Crown equip (village-only)
 function handleCrownPickup() {
   if (!objects.goldenCrown || goose.hasCrown) return;
   const crown = objects.goldenCrown;
   if (crown.isCarried) {
-    // Auto-equip crown
     goose.addCrown();
-    // Drop it from beak (crown goes on head instead)
     interaction.forceDropCarried();
   }
 }
 
-// C2: Radio distraction for old lady
+// C2: Radio distraction for old lady (village-only)
 function updateRadioDistraction(dt) {
   const radio = objects.getByName('radio');
   if (!radio || radio.isCarried || !radio.isPlaying) return;
@@ -469,9 +519,7 @@ function updateRadioDistraction(dt) {
   const ladyPos = oldLadyEntry.villager.getPosition();
   const dist = distXZ(ladyPos, radioPos);
 
-  // Old lady is drawn to playing radio
   if (dist > 2 && oldLadyEntry.ai.getState() === AIState.PATROL) {
-    // Lure old lady toward radio
     oldLadyEntry.ai.investigateTarget = { x: radioPos.x, z: radioPos.z };
     if (oldLadyEntry.ai.getState() !== AIState.INVESTIGATE) {
       oldLadyEntry.ai.state = AIState.INVESTIGATE;
@@ -480,13 +528,12 @@ function updateRadioDistraction(dt) {
     }
   }
 
-  // Halve alert radius while listening
   if (dist < 3) {
     oldLadyEntry.ai.alertRadius = oldLadyEntry.ai.baseAlertRadius * 0.5;
   }
 }
 
-// F3: Spawn sandbox rewards
+// F3: Spawn sandbox rewards (village-only)
 function spawnSandboxRewards() {
   if (sandboxRewardsSpawned) return;
   sandboxRewardsSpawned = true;
@@ -496,7 +543,7 @@ function spawnSandboxRewards() {
 function checkSpecialEvents(dt) {
   const goosePos = goose.getPosition();
 
-  // Boy falling in puddle - if boy is chasing goose and goose runs past puddle
+  // Boy falling in puddle
   const boyEntry = villagers.find(v => v.villager.type === 'boy');
   if (boyEntry && !gameState.boyFall) {
     const boyPos = boyEntry.villager.getPosition();
@@ -506,8 +553,7 @@ function checkSpecialEvents(dt) {
       gameState.events.boyFellInPuddle = true;
       boyEntry.ai.trapped = true;
       audio.thud();
-      cam.shake(0.12, 0.3); // G2: Screen shake
-      // Face the puddle center so the boy falls toward it
+      cam.shake(0.12, 0.3);
       const dx = puddlePos.x - boyPos.x;
       const dz = puddlePos.z - boyPos.z;
       boyEntry.villager.group.rotation.y = Math.atan2(dx, dz);
@@ -522,7 +568,6 @@ function checkSpecialEvents(dt) {
     fall.timer += dt;
 
     if (fall.phase === 'falling') {
-      // Tip forward over 0.4s
       const t = Math.min(fall.timer / 0.4, 1);
       group.rotation.x = t * (Math.PI / 2);
       group.position.y = t * 0.35;
@@ -531,13 +576,11 @@ function checkSpecialEvents(dt) {
         fall.timer = 0;
       }
     } else if (fall.phase === 'lying') {
-      // Stay on the ground for 2s
       if (fall.timer >= 2) {
         fall.phase = 'getting_up';
         fall.timer = 0;
       }
     } else if (fall.phase === 'getting_up') {
-      // Rotate back upright over 0.5s
       const t = Math.min(fall.timer / 0.5, 1);
       group.rotation.x = (1 - t) * (Math.PI / 2);
       group.position.y = (1 - t) * 0.35;
@@ -547,7 +590,6 @@ function checkSpecialEvents(dt) {
         boyEntry.ai.trapped = false;
         gameState.boyFall = null;
 
-        // Walk away from the puddle and avoid it in the future
         const puddlePos = { x: 8, z: 12 };
         const boyPos = boyEntry.villager.getPosition();
         const awayX = boyPos.x - puddlePos.x;
@@ -576,11 +618,11 @@ function checkSpecialEvents(dt) {
       gameState.events.shopkeeperTrapped = true;
       shopEntry.ai.trapped = true;
       shopEntry.villager.group.position.set(5, 0, 2);
-      cam.shake(0.08, 0.2); // G2: Screen shake
+      cam.shake(0.08, 0.2);
     }
   }
 
-  // Sneaked into garden - goose is inside garden1 area and gardener is patrolling
+  // Sneaked into garden
   if (!gameState.events.sneakedIntoGarden) {
     const gardenCenter = { x: 12, z: -6 };
     const gooseDist = distXZ(goosePos, gardenCenter);
@@ -596,7 +638,6 @@ function checkSpecialEvents(dt) {
 function checkNewTaskEvents(dt) {
   const goosePos = goose.getPosition();
 
-  // E1: Get the gardener wet - watering can on gardener's path, gardener walks over it
   if (!gameState.events.gardenerWet) {
     const wateringCan = objects.getByName('wateringCan');
     const gardenerEntry = villagers.find(v => v.villager.type === 'gardener');
@@ -608,7 +649,6 @@ function checkNewTaskEvents(dt) {
         gameState.events.gardenerWet = true;
         audio.splash();
         cam.shake(0.08, 0.3);
-        // Brief stumble animation
         gardenerEntry.ai.trapped = true;
         setTimeout(() => {
           gardenerEntry.ai.trapped = false;
@@ -619,7 +659,6 @@ function checkNewTaskEvents(dt) {
     }
   }
 
-  // E2: Lead shopkeeper to pub - shopkeeper chasing near pub
   if (!gameState.events.shopkeeperAtPub) {
     const shopEntry = villagers.find(v => v.villager.type === 'shopkeeper');
     if (shopEntry && shopEntry.ai.getState() === AIState.CHASE) {
@@ -631,14 +670,12 @@ function checkNewTaskEvents(dt) {
     }
   }
 
-  // E4: Chase boy into pond - boy is chasing, honk-startle near pond pushes him in
   if (!gameState.events.boyInPond) {
     const boyEntry = villagers.find(v => v.villager.type === 'boy');
     if (boyEntry) {
       const boyPos = boyEntry.villager.getPosition();
       const pondCenter = { x: -8, z: 10 };
       if (distXZ(boyPos, pondCenter) < 4.5 && boyEntry.ai.getState() === AIState.STARTLED) {
-        // Check if flinch knocked him toward pond
         const kb = boyEntry.ai.startledKnockback;
         if (kb) {
           const futureX = boyPos.x + kb.x * 2;
@@ -659,7 +696,6 @@ function checkNewTaskEvents(dt) {
     }
   }
 
-  // E5: Lock gardener out - gardener outside garden, gate closed
   if (!gameState.events.gardenerLockedOut) {
     const gardenerEntry = villagers.find(v => v.villager.type === 'gardener');
     const gate1 = objects.getByName('garden1_gate');
@@ -667,19 +703,16 @@ function checkNewTaskEvents(dt) {
       const gardenerPos = gardenerEntry.villager.getPosition();
       const gardenCenter = { x: 12, z: -6 };
       const distToGarden = distXZ(gardenerPos, gardenCenter);
-      // Gardener is outside garden (>4 units from center) and gate is closed
       if (distToGarden > 4 && !gate1.isOpen) {
         gameState.events.gardenerLockedOut = true;
       }
     }
   }
 
-  // F2: Track "no catch" for horrible task
   if (!gameState.wasCaught && taskSystem.allComplete) {
     gameState.events.completedWithoutCatch = true;
   }
 
-  // F3: Pub bell makes all NPCs look toward pub after completion
   if (sandboxRewardsSpawned) {
     const pubBell = objects.getByName('pubBell');
     if (pubBell && pubBell.ringing) {

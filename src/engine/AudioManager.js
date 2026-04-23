@@ -4,6 +4,7 @@ export class AudioManager {
     this.masterGain = null;
     this.ambientNode = null;
     this.radioNodes = null;
+    this.alarmNodes = null;
   }
 
   init() {
@@ -628,5 +629,169 @@ export class AudioManager {
       default:
         this.pickup();
     }
+  }
+
+  // === Library sounds ===
+
+  pageFlip() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dur = 0.12;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      const env = Math.exp(-n * 8);
+      d[i] = (Math.random() * 2 - 1) * env * 0.4;
+    }
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
+    const g = this.ctx.createGain(); g.gain.value = 0.1;
+    s.connect(hp); hp.connect(g); g.connect(this.masterGain);
+    s.start(t);
+  }
+
+  stampThud() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.08);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+    osc.connect(g); g.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.12);
+  }
+
+  shhh() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dur = 0.5;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      const env = n < 0.1 ? n / 0.1 : Math.exp(-(n - 0.1) * 3);
+      d[i] = (Math.random() * 2 - 1) * env * 0.5;
+    }
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 5500; bp.Q.value = 0.8;
+    const g = this.ctx.createGain(); g.gain.value = 0.12;
+    s.connect(bp); bp.connect(g); g.connect(this.masterGain);
+    s.start(t);
+  }
+
+  startFireAlarm() {
+    if (!this.ctx || this.alarmNodes) return;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.08;
+    gain.connect(this.masterGain);
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 720;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 900;
+    filter.Q.value = 2;
+
+    osc.connect(filter);
+    filter.connect(gain);
+    osc.start();
+
+    // Alternate between two pitches every 0.25s
+    let high = true;
+    const interval = setInterval(() => {
+      if (!this.ctx) return;
+      high = !high;
+      osc.frequency.setValueAtTime(high ? 720 : 540, this.ctx.currentTime);
+    }, 250);
+
+    this.alarmNodes = { osc, gain, filter, interval };
+  }
+
+  stopFireAlarm() {
+    if (!this.alarmNodes) return;
+    clearInterval(this.alarmNodes.interval);
+    try { this.alarmNodes.osc.stop(); } catch {}
+    this.alarmNodes = null;
+  }
+
+  bookshelfCrash(pitchShift = 1.0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // Low-end body slam
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110 * pitchShift, t);
+    osc.frequency.exponentialRampToValueAtTime(40 * pitchShift, t + 0.3);
+    const oscG = this.ctx.createGain();
+    oscG.gain.setValueAtTime(0.45, t);
+    oscG.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+    osc.connect(oscG); oscG.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.45);
+
+    // Wood creak-snap
+    const crackDur = 0.25;
+    const crackLen = Math.floor(this.ctx.sampleRate * crackDur);
+    const crackBuf = this.ctx.createBuffer(1, crackLen, this.ctx.sampleRate);
+    const cd = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackLen; i++) {
+      const n = i / crackLen;
+      const env = Math.exp(-n * 5);
+      cd[i] = (Math.random() * 2 - 1) * env * 0.7;
+    }
+    const crackSrc = this.ctx.createBufferSource(); crackSrc.buffer = crackBuf;
+    const crackF = this.ctx.createBiquadFilter();
+    crackF.type = 'bandpass'; crackF.frequency.value = 500 * pitchShift; crackF.Q.value = 2;
+    const crackG = this.ctx.createGain(); crackG.gain.value = 0.25;
+    crackSrc.connect(crackF); crackF.connect(crackG); crackG.connect(this.masterGain);
+    crackSrc.start(t);
+
+    // Paper clatter tail (like clatter but softer + higher)
+    const clatterDur = 0.6;
+    const clatterLen = Math.floor(this.ctx.sampleRate * clatterDur);
+    const clatterBuf = this.ctx.createBuffer(1, clatterLen, this.ctx.sampleRate);
+    const cld = clatterBuf.getChannelData(0);
+    for (let i = 0; i < clatterLen; i++) {
+      const n = i / clatterLen;
+      const env = n < 0.15 ? 0 : Math.exp(-(n - 0.15) * 4);
+      cld[i] = (Math.random() * 2 - 1) * env;
+    }
+    const clatterSrc = this.ctx.createBufferSource(); clatterSrc.buffer = clatterBuf;
+    const clatterF = this.ctx.createBiquadFilter();
+    clatterF.type = 'highpass'; clatterF.frequency.value = 1800;
+    const clatterG = this.ctx.createGain(); clatterG.gain.value = 0.12;
+    clatterSrc.connect(clatterF); clatterF.connect(clatterG); clatterG.connect(this.masterGain);
+    clatterSrc.start(t);
+  }
+
+  ladderClatter() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const dur = 0.5;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const n = i / len;
+      // Several spaced impact spikes for bouncing ladder
+      const spikes = Math.sin(i * 0.15) + Math.sin(i * 0.42) + Math.sin(i * 0.78);
+      const env = Math.exp(-n * 3);
+      d[i] = (spikes * 0.3 + (Math.random() * 2 - 1) * 0.4) * env;
+    }
+    const s = this.ctx.createBufferSource(); s.buffer = buf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 600;
+    const g = this.ctx.createGain(); g.gain.value = 0.18;
+    s.connect(hp); hp.connect(g); g.connect(this.masterGain);
+    s.start(t);
   }
 }

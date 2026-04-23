@@ -40,8 +40,26 @@ export class VillagerAI {
     // Zones to avoid when not chasing (same format as pond: {x, z, r})
     this.avoidZones = [];
 
-    // D3: Field of view (120-degree cone)
-    this.fovAngle = Math.PI / 3; // 60 degrees half-angle = 120 degree cone
+    // D3: Field of view (120-degree cone by default)
+    // Pass config.fovAngle as the full cone angle in radians (half-angle stored here).
+    this.fovAngle = config.fovAngle ? config.fovAngle / 2 : Math.PI / 3;
+    // Optional line-of-sight predicate (e.g. bookshelves block vision).
+    // Signature: (ax, az, bx, bz) => boolean (true = blocked).
+    this.losCheck = config.losCheck || null;
+    // Optional collision resolver so villagers slide against static AABBs
+    // (bookshelves, walls, desks). Signature: (oldPos, newPos, radius) => {x, z}.
+    this.collisionResolve = config.collisionResolve || null;
+    this.collisionRadius = config.collisionRadius ?? 0.4;
+    // Re-entry: if the villager's patrol is confined to an area with a narrow
+    // opening (e.g. the library doorway), a straight-line RETURN from outside
+    // will stall against the wall. When both are set, doReturn routes through
+    // entryWaypoint first whenever she's outside.
+    this.insideCheck = config.insideCheck || null;
+    this.entryWaypoint = config.entryWaypoint || null;
+    this.returnQueue = [];
+    // Seated flag: NPC never patrols/chases, only reacts in-place (see doSeated).
+    this.seated = config.seated === true;
+    this.disturbed = false;
     this.headScanTimer = 0;
     this.headScanDirection = 0; // -1, 0, 1
 
@@ -76,6 +94,23 @@ export class VillagerAI {
   update(dt, goosePos, gameState) {
     if (this.trapped) {
       this.villager.isWalking = false;
+      return;
+    }
+
+    // Seated NPCs (readers) never patrol or chase; only react to honks via onHonk().
+    // They may still play the flinch/startled recovery so update visual state only.
+    if (this.seated) {
+      this.villager.isWalking = false;
+      if (this.state === State.STARTLED) {
+        this.startledTimer += dt;
+        if (this.startledTimer < 0.5) {
+          this.villager.setFlinch(1 - this.startledTimer / 0.5);
+        } else {
+          this.villager.setFlinch(0);
+          this.state = State.IDLE; // drop back into seated reading
+        }
+      }
+      this.villager.update(dt);
       return;
     }
 
@@ -144,9 +179,16 @@ export class VillagerAI {
   // D3: Check if goose is within NPC's field of view
   isInFieldOfView(myPos, goosePos) {
     const facingAngle = this.villager.group.rotation.y;
+    // Head scan widens effective FOV: offset angle by current head scan direction.
+    const headOffset = (this.villager.headScanCurrent || 0) * 0.6;
     const toGooseAngle = Math.atan2(goosePos.x - myPos.x, goosePos.z - myPos.z);
-    const diff = Math.abs(angleDiff(facingAngle, toGooseAngle));
-    return diff < this.fovAngle;
+    const diff = Math.abs(angleDiff(facingAngle + headOffset, toGooseAngle));
+    if (diff >= this.fovAngle) return false;
+    // If a level provided an LOS predicate, respect occluders (e.g. bookshelves).
+    if (this.losCheck && this.losCheck(myPos.x, myPos.z, goosePos.x, goosePos.z)) {
+      return false;
+    }
+    return true;
   }
 
   // Combined detection check: distance + FoV + hidden
@@ -288,17 +330,32 @@ export class VillagerAI {
     this.villager.setAlert(false);
     this.villager.setBubble(null);
 
-    if (!this.returnTarget) {
+    // Insert the doorway waypoint if she's outside her home area and hasn't
+    // already queued it. Without this, moveToward drives her straight at the
+    // wall flanking the door and she slides sideways without finding the gap.
+    if (this.entryWaypoint && this.insideCheck
+        && this.returnQueue.length === 0
+        && !this.insideCheck(myPos)
+        && (!this.returnTarget || this.insideCheck(this.returnTarget))) {
+      this.returnQueue.push({ x: this.entryWaypoint.x, z: this.entryWaypoint.z });
+    }
+
+    const target = this.returnQueue[0] || this.returnTarget;
+    if (!target) {
       this.state = State.PATROL;
       return;
     }
 
-    const dist = distXZ(myPos, this.returnTarget);
+    const dist = distXZ(myPos, target);
     if (dist < 0.5) {
-      this.state = State.PATROL;
-      this.returnTarget = null;
+      if (this.returnQueue.length > 0) {
+        this.returnQueue.shift();
+      } else {
+        this.state = State.PATROL;
+        this.returnTarget = null;
+      }
     } else {
-      this.moveToward(myPos, this.returnTarget, this.patrolSpeed, dt);
+      this.moveToward(myPos, target, this.patrolSpeed, dt);
       this.villager.isWalking = true;
     }
   }
@@ -414,6 +471,21 @@ export class VillagerAI {
     const myPos = this.villager.getPosition();
     const dist = distXZ(myPos, goosePos);
 
+    // Seated NPCs (readers): flinch + mark disturbed once, do not chase.
+    if (this.seated) {
+      if (dist < 3.5) {
+        this.villager.stopIdleActivity();
+        this.villager.flinch();
+        this.villager.setBubble('searching');
+        this.state = State.STARTLED;
+        this.startledTimer = 0;
+        const wasDisturbed = this.disturbed;
+        this.disturbed = true;
+        return wasDisturbed ? 'startled' : 'disturb';
+      }
+      return null;
+    }
+
     // A1: Startle within 8 units
     if (dist < 8) {
       const dx = myPos.x - goosePos.x;
@@ -473,29 +545,22 @@ export class VillagerAI {
     const nx = dx / dist;
     const nz = dz / dist;
 
+    const oldX = from.x;
+    const oldZ = from.z;
+
     from.x += nx * speed * dt;
     from.z += nz * speed * dt;
 
-    // Prevent villagers from entering the pond
-    const pondX = -8, pondZ = 10, pondR = 4.0;
-    const toPondX = from.x - pondX;
-    const toPondZ = from.z - pondZ;
-    const pondDist = Math.sqrt(toPondX * toPondX + toPondZ * toPondZ);
-    if (pondDist < pondR) {
-      from.x = pondX + (toPondX / pondDist) * pondR;
-      from.z = pondZ + (toPondZ / pondDist) * pondR;
-    }
-
-    // Avoid zones (skipped during chase so villager can stumble in)
-    if (this.state !== State.CHASE) {
-      for (const zone of this.avoidZones) {
-        const zx = from.x - zone.x;
-        const zz = from.z - zone.z;
-        const zd = Math.sqrt(zx * zx + zz * zz);
-        if (zd < zone.r) {
-          from.x = zone.x + (zx / zd) * zone.r;
-          from.z = zone.z + (zz / zd) * zone.r;
-        }
+    // Avoid zones. By default skipped during chase so villagers can stumble
+    // into e.g. a puddle; zones flagged evenDuringChase (the pond) still apply.
+    for (const zone of this.avoidZones) {
+      if (this.state === State.CHASE && !zone.evenDuringChase) continue;
+      const zx = from.x - zone.x;
+      const zz = from.z - zone.z;
+      const zd = Math.sqrt(zx * zx + zz * zz);
+      if (zd < zone.r) {
+        from.x = zone.x + (zx / zd) * zone.r;
+        from.z = zone.z + (zz / zd) * zone.r;
       }
     }
 
@@ -511,6 +576,18 @@ export class VillagerAI {
           from.z = bin.z + (bz / bd) * 0.8;
         }
       }
+    }
+
+    // Slide against static AABBs (shelves, walls, desks). Applied in all
+    // states — physical obstacles are never phased through, even during chase.
+    if (this.collisionResolve) {
+      const r = this.collisionResolve(
+        { x: oldX, z: oldZ },
+        { x: from.x, z: from.z },
+        this.collisionRadius,
+      );
+      from.x = r.x;
+      from.z = r.z;
     }
 
     this.villager.group.rotation.y = Math.atan2(nx, nz);

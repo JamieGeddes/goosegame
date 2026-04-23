@@ -75,6 +75,11 @@ export class Goose {
     this.beakTip.position.set(0, -0.02, 0.28);
     this.head.add(this.beakTip);
 
+    // Head-wear attach point (for items worn on the face, e.g. stolen glasses)
+    this.headWearAttach = new THREE.Object3D();
+    this.headWearAttach.position.set(0, 0.04, 0.12);
+    this.head.add(this.headWearAttach);
+
     // Eyes
     const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
     const eyeL = new THREE.Mesh(eyeGeo, Mat.gooseEye);
@@ -339,6 +344,22 @@ export class Goose {
   }
 
   detachFromBeak() {
+    if (this.carryingItem) {
+      const item = this.carryingItem;
+      this.carryingItem = null;
+      return item;
+    }
+    return null;
+  }
+
+  wearOnHead(object) {
+    this.headWearAttach.add(object);
+    object.position.set(0, 0, 0);
+    object.rotation.set(0, 0, 0);
+    this.carryingItem = object;
+  }
+
+  removeFromHead() {
     if (this.carryingItem) {
       const item = this.carryingItem;
       this.carryingItem = null;

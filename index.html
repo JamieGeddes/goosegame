@@ -33,16 +33,27 @@
     #start-screen .subtitle {
       font-size: 18px; color: #2d5a1e; margin-top: 8px; font-style: italic;
     }
+    #start-screen .level-select {
+      margin-top: 30px; display: flex; gap: 20px;
+    }
     #start-screen .play-btn {
-      margin-top: 30px; padding: 14px 48px;
-      font-size: 24px; font-family: 'Georgia', serif; font-weight: bold;
-      background: #4CAF50; color: #fff; border: 3px solid #2d7a30;
-      border-radius: 8px; cursor: pointer;
-      box-shadow: 0 4px 0 #2d7a30, 0 6px 12px rgba(0,0,0,0.3);
+      padding: 14px 36px;
+      font-size: 22px; font-family: 'Georgia', serif; font-weight: bold;
+      color: #fff; border-radius: 8px; cursor: pointer;
       transition: transform 0.1s, box-shadow 0.1s;
     }
-    .play-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #2d7a30, 0 8px 16px rgba(0,0,0,0.3); }
-    .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #2d7a30, 0 3px 6px rgba(0,0,0,0.3); }
+    #start-screen .play-btn.village {
+      background: #4CAF50; border: 3px solid #2d7a30;
+      box-shadow: 0 4px 0 #2d7a30, 0 6px 12px rgba(0,0,0,0.3);
+    }
+    #start-screen .play-btn.library {
+      background: #8b5a2b; border: 3px solid #5a3a1a;
+      box-shadow: 0 4px 0 #5a3a1a, 0 6px 12px rgba(0,0,0,0.3);
+    }
+    .play-btn.village:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #2d7a30, 0 8px 16px rgba(0,0,0,0.3); }
+    .play-btn.village:active { transform: translateY(2px); box-shadow: 0 2px 0 #2d7a30, 0 3px 6px rgba(0,0,0,0.3); }
+    .play-btn.library:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #5a3a1a, 0 8px 16px rgba(0,0,0,0.3); }
+    .play-btn.library:active { transform: translateY(2px); box-shadow: 0 2px 0 #5a3a1a, 0 3px 6px rgba(0,0,0,0.3); }
     #start-screen .controls-hint {
       margin-top: 24px; color: #3a6b2a; font-size: 13px; text-align: center; line-height: 1.8;
     }
@@ -122,7 +133,10 @@
     <img src="/images/Goose.png" alt="A mischievous goose" />
     <h1>GOOSE GAME</h1>
     <p class="subtitle">a game about being a horrible goose</p>
-    <button class="play-btn" id="play-btn">PLAY</button>
+    <div class="level-select">
+      <button class="play-btn village" id="play-btn-village">VILLAGE</button>
+      <button class="play-btn library" id="play-btn-library">LIBRARY</button>
+    </div>
     <div class="controls-hint">
       <span>Arrow Keys</span> Move &nbsp; <span>Shift</span> Run &nbsp; <span>Space</span> Interact<br/>
       <span>H</span> Honk &nbsp; <span>C</span> Crouch &nbsp; <span>Mouse</span> Look Around

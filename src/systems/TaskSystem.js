@@ -1,21 +1,24 @@
 import { TASKS, HORRIBLE_TASKS } from './TaskDefinitions.js';
 
 export class TaskSystem {
-  constructor(audioManager) {
+  constructor(audioManager, options = {}) {
     this.audio = audioManager;
-    this.tasks = TASKS.map(t => ({ ...t, completed: false }));
+    const taskSource = options.tasks || TASKS;
+    const horribleSource = options.horribleTasks || HORRIBLE_TASKS;
+    this.levelId = options.levelId || 'village';
+    this.tasks = taskSource.map(t => ({ ...t, completed: false }));
     this.allComplete = false;
     this.onTaskComplete = null;
     this.onAllComplete = null;
 
     // F2: Second tier tasks
-    this.horribleTasks = HORRIBLE_TASKS.map(t => ({ ...t, completed: false }));
+    this.horribleTasks = horribleSource.map(t => ({ ...t, completed: false }));
     this.isHorribleMode = false;
     this.horribleComplete = false;
     this.onHorribleTaskComplete = null;
     this.onHorribleComplete = null;
 
-    // F1: Speedrun timer
+    // F1: Speedrun timer (per-level PB)
     this.speedrunActive = false;
     this.speedrunTime = 0;
     this.personalBest = this.loadPersonalBest();
@@ -113,7 +116,7 @@ export class TaskSystem {
 
   loadPersonalBest() {
     try {
-      const val = localStorage.getItem('goose_speedrun_pb');
+      const val = localStorage.getItem(`goose_speedrun_pb_${this.levelId}`);
       return val ? parseFloat(val) : null;
     } catch {
       return null;
@@ -122,7 +125,7 @@ export class TaskSystem {
 
   savePersonalBest() {
     try {
-      localStorage.setItem('goose_speedrun_pb', this.speedrunTime.toString());
+      localStorage.setItem(`goose_speedrun_pb_${this.levelId}`, this.speedrunTime.toString());
     } catch {
       // Silently fail if localStorage is unavailable
     }
