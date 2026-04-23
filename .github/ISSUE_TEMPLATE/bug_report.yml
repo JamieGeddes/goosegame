@@ -1,0 +1,59 @@
+name: Bug report
+description: Report something broken or not working as expected in the game
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A short description of the bug.
+      placeholder: e.g. Goose falls through the floor when honking near the fountain.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can someone else trigger this bug?
+      placeholder: |
+        1. Start a new game
+        2. Walk to the fountain
+        3. Press H to honk
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser / environment
+      description: Browser and version, OS, device. Helpful since this is a browser game.
+      placeholder: e.g. Chrome 124 on macOS 14, Safari 17 on iPad
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or console errors
+      description: Drag and drop screenshots, or paste any errors from the browser devtools console.
+    validations:
+      required: false
