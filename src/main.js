@@ -31,10 +31,15 @@ const VOCAL_PITCH = {
 
 function init() {
   ui = new UIManager(startGame);
+  // Warm the goose model while the player is still on the start screen
+  Goose.preload().catch(err => console.error('Failed to load the goose model', err));
 }
 
-function startGame() {
+async function startGame() {
   const canvas = document.getElementById('game-canvas');
+
+  // The goose is a loaded .glb, so it has to be ready before anything is built
+  await Goose.preload();
 
   // Core systems
   engine = new GameEngine(canvas);

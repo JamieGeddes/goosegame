@@ -20,6 +20,8 @@ export const Mat = {
   gooseLeg:     toon(0xe87830),
   gooseHatGreen:toon(0x3a8a3a),
   gooseScarf:   toon(0x3a8a3a),
+  gooseHatBand: toon(0x2a7a8a),
+  gooseHatPom:  toon(0x6fb355),
 
   // Nature
   grass:        toon(0x5dad3a),
